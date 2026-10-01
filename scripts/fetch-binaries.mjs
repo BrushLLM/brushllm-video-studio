@@ -9,7 +9,7 @@
 // Sources are pinned with SHA-256 checksums — each binary is verified
 // (checksum, architecture, -version) before it is written.
 import { execSync, spawnSync } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, rmSync, chmodSync, statSync, renameSync, readFileSync, readdirSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, rmSync, chmodSync, statSync, renameSync, readFileSync, readdirSync, copyFileSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -112,7 +112,7 @@ async function fetchDarwinArm64(work, destDir, spec) {
       console.log(`packing ${s.npm}`);
       const tgzName = execSync(`npm pack ${s.npm}`, { cwd: work }).toString().trim().split('\n').pop();
       execSync(`tar -xzf "${join(work, tgzName)}" -C "${work}"`);
-      renameSync(join(work, 'package', tool), file);
+      copyFileSync(join(work, 'package', tool), file);
       rmSync(join(work, 'package'), { recursive: true, force: true });
     }
     chmodSync(file, 0o755);
@@ -121,7 +121,8 @@ async function fetchDarwinArm64(work, destDir, spec) {
     verifyArch(file, 'darwin', s.arch);
     verifyRuns(file);
     rmSync(join(destDir, tool), { force: true });
-    renameSync(file, join(destDir, tool));
+    copyFileSync(file, join(destDir, tool));
+    rmSync(file, { force: true });
     chmodSync(join(destDir, tool), 0o755);
     console.log(`vendor/darwin-arm64/${tool}: ${(statSync(join(destDir, tool)).size / 1048576).toFixed(1)} MB — verified`);
   }
@@ -142,7 +143,8 @@ async function fetchWindows(work, destDir, spec, arch) {
     }
     verifyArch(src, 'win32', arch);
     rmSync(join(destDir, `${tool}.exe`), { force: true });
-    renameSync(src, join(destDir, `${tool}.exe`));
+    copyFileSync(src, join(destDir, `${tool}.exe`));
+    rmSync(src, { force: true });
     console.log(`vendor/win32-${arch}/${tool}.exe: ${(statSync(join(destDir, `${tool}.exe`)).size / 1048576).toFixed(1)} MB — sha256 + arch verified`);
   }
   // -version cannot run on a non-Windows host; the checksum + PE arch checks
