@@ -195,7 +195,6 @@ export default {
   'settings.concurrencyHint': '同時處理更多任務更快,但占用更多 CPU。',
   'settings.preventSleep': "防睡眠",
   'settings.preventSleepHint': "處理任務期間阻止系統進入睡眠(螢幕仍可關閉)。",
-  'settings.openReleases': "開啟發布頁面",
   'settings.checkUpdate': "檢查更新",
   'settings.upToDate': "已是最新版本。",
   'settings.updateAvailable': "新版本 {version} 可用",

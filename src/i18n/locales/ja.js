@@ -195,7 +195,6 @@ export default {
   'settings.concurrencyHint': '同時実行を増やすと速く終わりますが、CPU をより使います。',
   'settings.preventSleep': "スリープ防止",
   'settings.preventSleepHint': "処理中はシステムがスリープしないようにします(ディスプレイはオフになります)。",
-  'settings.openReleases': "リリースページ",
   'settings.checkUpdate': "アップデートを確認",
   'settings.upToDate': "最新バージョンです。",
   'settings.updateAvailable': "バージョン {version} が利用可能",

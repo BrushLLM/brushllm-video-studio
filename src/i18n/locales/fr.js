@@ -195,7 +195,6 @@ export default {
   'settings.concurrencyHint': 'Plus de tâches simultanées finissent plus vite mais consomment plus de CPU.',
   'settings.preventSleep': "Éviter la veille",
   'settings.preventSleepHint': "Maintient le système éveillé pendant le traitement des tâches (l’écran peut s’éteindre).",
-  'settings.openReleases': "Page des Releases",
   'settings.checkUpdate': "Rechercher des mises à jour",
   'settings.upToDate': "Vous utilisez la dernière version.",
   'settings.updateAvailable': "Version {version} disponible",

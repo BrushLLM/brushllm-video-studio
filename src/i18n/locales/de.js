@@ -195,7 +195,6 @@ export default {
   'settings.concurrencyHint': 'Mehr Vorgänge gleichzeitig sind schneller, beanspruchen aber mehr CPU.',
   'settings.preventSleep': "Ruhe verhindern",
   'settings.preventSleepHint': "Verhindert, dass das System während der Verarbeitung in den Ruhezustand wechsht (Display darf trotzdem ausgehen).",
-  'settings.openReleases': "Releases öffnen",
   'settings.checkUpdate': "Nach Updates suchen",
   'settings.upToDate': "Du nutzt die neueste Version.",
   'settings.updateAvailable': "Version {version} ist verfügbar",

@@ -195,7 +195,6 @@ export default {
   'settings.concurrencyHint': 'More jobs at once finish faster but use more CPU.',
   'settings.preventSleep': "Prevent Sleep",
   'settings.preventSleepHint': "Keeps the system awake while jobs are processing (the display may still turn off).",
-  'settings.openReleases': "Release Page",
   'settings.checkUpdate': "Check for Updates",
   'settings.upToDate': "You are up to date.",
   'settings.updateAvailable': "Version {version} is available",

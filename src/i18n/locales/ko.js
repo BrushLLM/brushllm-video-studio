@@ -195,7 +195,6 @@ export default {
   'settings.concurrencyHint': '동시 작업이 많으면 빠르지만 CPU를 더 사용합니다.',
   'settings.preventSleep': "절전 방지",
   'settings.preventSleepHint': "작업 처리 중 시스템이 절전 모드로 전환되지 않도록 합니다(화면은 꺼질 수 있음).",
-  'settings.openReleases': "릴리즈 페이지",
   'settings.checkUpdate': "업데이트 확인",
   'settings.upToDate': "최신 버전입니다.",
   'settings.updateAvailable': "버전 {version} 사용 가능",
