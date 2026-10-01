@@ -20,9 +20,7 @@ jobs:
       - run: npm ci
       - name: Fetch pinned media engine (SHA-256 verified)
         run: node scripts/fetch-binaries.mjs
-      - run: npm run dist:mac-arm64
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm run dist:mac-arm64 -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: mac-arm64
@@ -42,14 +40,10 @@ jobs:
       - name: Fetch pinned media engine (SHA-256 verified)
         run: node scripts/fetch-binaries.mjs
         shell: bash
-      - run: npm run dist:win-x64
+      - run: npm run dist:win-x64 -- --publish never
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: npm run dist:win-arm64
+      - run: npm run dist:win-arm64 -- --publish never
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -69,7 +63,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p out
-          find artifacts -name "*.dmg" -o -name "*.exe" | xargs -I{} cp {} out/
+          find artifacts -name "*.dmg" -o -name "*.exe" | xargs -r -I{} cp {} out/
           ls -la out/
       - uses: softprops/action-gh-release@v2
         with:
