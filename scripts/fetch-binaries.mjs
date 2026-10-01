@@ -90,6 +90,13 @@ function verifyArch(file, platform, expectedArch) {
 }
 
 function verifyRuns(file) {
+  // Only verify execution on the matching host platform — a darwin binary
+  // can't run on a Windows runner (and vice versa). SHA + arch checks are
+  // the executable verification for cross-platform fetches.
+  const isDarwinBin = file.includes('darwin') || !file.includes('.exe');
+  const canRun = (process.platform === 'darwin' && isDarwinBin) ||
+                 (process.platform === 'win32' && file.includes('.exe'));
+  if (!canRun) return;
   const r = spawnSync(file, ['-version']);
   if (r.status !== 0) throw new Error(`${file}: -version failed`);
 }
