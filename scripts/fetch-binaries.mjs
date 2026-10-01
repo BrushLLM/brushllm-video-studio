@@ -133,9 +133,13 @@ async function fetchWindows(work, destDir, spec, arch) {
   const zip = join(work, 'btbn.zip');
   console.log(`downloading ${spec.zip.url}`);
   await download(spec.zip.url, zip);
-  // bsdtar handles zip on macOS, Linux and Windows runners alike.
-  // Relative path + cwd avoids Windows tar's drive-letter colon issue.
-  execSync(`tar -xf btbn.zip`, { cwd: work });
+  // Extract with PowerShell on Windows (tar on Windows runners can't handle
+  // large zips reliably); bsdtar on macOS/Linux.
+  if (process.platform === 'win32') {
+    execSync(`powershell -Command "Expand-Archive -Path 'btbn.zip' -DestinationPath '.' -Force"`, { cwd: work });
+  } else {
+    execSync(`tar -xf btbn.zip`, { cwd: work });
+  }
   const binDir = join(work, readdirSync(work).find((d) => d.startsWith('ffmpeg-') && !d.endsWith('.zip')), 'bin');
   for (const tool of ['ffmpeg', 'ffprobe']) {
     const src = join(binDir, `${tool}.exe`);
