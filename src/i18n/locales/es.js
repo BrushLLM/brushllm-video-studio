@@ -195,6 +195,7 @@ export default {
   'settings.concurrencyHint': 'Más tareas a la vez acaban antes pero usan más CPU.',
   'settings.preventSleep': "Evitar suspensión",
   'settings.preventSleepHint': "Mantiene el sistema despierto mientras hay tareas en proceso (la pantalla puede apagarse igualmente).",
+  'settings.openReleases': "Página de Releases",
   'settings.checkUpdate': "Buscar actualizaciones",
   'settings.upToDate': "Estás usando la última versión.",
   'settings.updateAvailable': "Versión {version} disponible",

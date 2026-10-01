@@ -9,28 +9,25 @@ export default function SettingsPage({ settings, setSettings }) {
   const [ffmpegPath, setFfmpegPath] = useState('');
   const [checking, setChecking] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null); // { latestVersion, releaseUrl, releaseNotes }
-  const [toast, setToast] = useState(null);
+  const [updateStatus, setUpdateStatus] = useState(null); // { msg, kind } — persistent status
 
   useEffect(() => { bridge.appInfo().then(setInfo); }, []);
 
-  const showToast = (msg, kind = 'success') => {
-    setToast({ msg, kind });
-    setTimeout(() => setToast(null), 3000);
-  };
-
   const checkForUpdate = async () => {
     setChecking(true);
+    setUpdateStatus(null);
     try {
       const result = await bridge.checkForUpdate();
       if (result.error) {
-        showToast(t('settings.updateCheckFailed'), 'error');
+        setUpdateStatus({ msg: t('settings.updateCheckFailed'), kind: 'error' });
       } else if (result.hasUpdate) {
         setUpdateInfo(result);
+        setUpdateStatus({ msg: t('settings.updateAvailable', { version: result.latestVersion }), kind: 'info' });
       } else {
-        showToast(t('settings.upToDate'));
+        setUpdateStatus({ msg: t('settings.upToDate', { version: result.currentVersion }), kind: 'success' });
       }
     } catch {
-      showToast(t('settings.updateCheckFailed'), 'error');
+      setUpdateStatus({ msg: t('settings.updateCheckFailed'), kind: 'error' });
     } finally {
       setChecking(false);
     }
@@ -135,19 +132,35 @@ export default function SettingsPage({ settings, setSettings }) {
 
       <div className="card settings-group">
         <h2>{t('settings.about')}</h2>
-        <div className="setting-row" style={{ marginBottom: 12 }}>
+        <div className="setting-row" style={{ marginBottom: 8 }}>
           <div>
             <dl className="about-grid">
-              <dt>{t('settings.version')}</dt><dd>{info?.version || '1.0.0'}</dd>
+              <dt>{t('settings.version')}</dt><dd>v{info?.version || '0.0.1'}</dd>
               <dt>Electron</dt><dd>{info?.electron || '—'}</dd>
               <dt>FFmpeg</dt><dd>{info ? '6.0' : '—'}</dd>
             </dl>
           </div>
-          <button className="btn btn-secondary" disabled={checking} onClick={checkForUpdate}>
-            <Icon name="rotate" size={13} className={checking ? 'spin' : ''} />
-            {checking ? '…' : t('settings.checkUpdate')}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+            <button className="btn btn-secondary" disabled={checking} onClick={checkForUpdate}>
+              <Icon name="rotate" size={13} className={checking ? 'spin' : ''} />
+              {checking ? '…' : t('settings.checkUpdate')}
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => bridge.openExternal('https://github.com/BrushLLM/brushllm-video-studio/releases')}
+            >
+              <Icon name="folder" size={12} /> {t('settings.openReleases')}
+            </button>
+          </div>
         </div>
+        {updateStatus && (
+          <div className={`update-status ${updateStatus.kind}`}>
+            {updateStatus.kind === 'success' && <Icon name="check" size={13} />}
+            {updateStatus.kind === 'info' && <Icon name="bolt" size={13} />}
+            {updateStatus.kind === 'error' && <Icon name="x" size={13} />}
+            {updateStatus.msg}
+          </div>
+        )}
         <div style={{ marginTop: 12 }}>
           <div className="setting-label">{t('settings.references')}</div>
           <div style={{ marginTop: 6 }}>
@@ -203,7 +216,6 @@ export default function SettingsPage({ settings, setSettings }) {
         </div>
       )}
 
-      {toast && <div className={`toast show ${toast.kind}`}>{toast.msg}</div>}
     </div>
   );
 }
