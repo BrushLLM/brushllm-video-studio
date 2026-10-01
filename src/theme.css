@@ -1002,3 +1002,21 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(0.95); backg
 .update-status.success { background: var(--mint-tint); color: var(--mint-deep); }
 .update-status.info { background: var(--violet-tint); color: var(--violet-deep); }
 .update-status.error { background: var(--danger-tint); color: var(--danger); }
+
+/* Compact check-update button (Apple style: text-only, small) */
+.btn-sm { padding: 4px 14px; font-size: 12px; font-weight: 500; }
+
+/* Inline download link inside the status box */
+.update-link {
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--violet-deep);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.update-link:hover { color: var(--violet); }

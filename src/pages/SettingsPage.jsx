@@ -140,25 +140,21 @@ export default function SettingsPage({ settings, setSettings }) {
               <dt>FFmpeg</dt><dd>{info ? '6.0' : '—'}</dd>
             </dl>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-            <button className="btn btn-secondary" disabled={checking} onClick={checkForUpdate}>
-              <Icon name="rotate" size={13} className={checking ? 'spin' : ''} />
-              {checking ? '…' : t('settings.checkUpdate')}
-            </button>
-            <button
-              className="btn btn-ghost"
-              onClick={() => bridge.openExternal('https://github.com/BrushLLM/brushllm-video-studio/releases')}
-            >
-              <Icon name="folder" size={12} /> {t('settings.openReleases')}
-            </button>
-          </div>
+          <button className="btn btn-secondary btn-sm" disabled={checking} onClick={checkForUpdate}>
+            {checking ? '…' : t('settings.checkUpdate')}
+          </button>
         </div>
         {updateStatus && (
           <div className={`update-status ${updateStatus.kind}`}>
-            {updateStatus.kind === 'success' && <Icon name="check" size={13} />}
-            {updateStatus.kind === 'info' && <Icon name="bolt" size={13} />}
-            {updateStatus.kind === 'error' && <Icon name="x" size={13} />}
             {updateStatus.msg}
+            {updateStatus.kind === 'info' && updateInfo && (
+              <button
+                className="update-link"
+                onClick={() => bridge.openExternal(updateInfo.releaseUrl)}
+              >
+                {t('settings.goToDownload')}
+              </button>
+            )}
           </div>
         )}
         <div style={{ marginTop: 12 }}>
