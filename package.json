@@ -1,7 +1,7 @@
 {
   "name": "brushllm-video-studio",
   "productName": "BrushLLM Video Studio",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Local, free video / audio / subtitle toolbox. 100% offline.",
   "author": "BrushLLM",
   "license": "MIT",
