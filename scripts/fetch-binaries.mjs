@@ -111,7 +111,8 @@ async function fetchDarwinArm64(work, destDir, spec) {
     } else {
       console.log(`packing ${s.npm}`);
       const tgzName = execSync(`npm pack ${s.npm}`, { cwd: work }).toString().trim().split('\n').pop();
-      execSync(`tar -xzf "${join(work, tgzName)}" -C "${work}"`);
+      // Use relative paths + cwd to avoid Windows tar's drive-letter colon issue.
+      execSync(`tar -xzf "${tgzName}"`, { cwd: work });
       copyFileSync(join(work, 'package', tool), file);
       rmSync(join(work, 'package'), { recursive: true, force: true });
     }
@@ -133,7 +134,8 @@ async function fetchWindows(work, destDir, spec, arch) {
   console.log(`downloading ${spec.zip.url}`);
   await download(spec.zip.url, zip);
   // bsdtar handles zip on macOS, Linux and Windows runners alike.
-  execSync(`tar -xf "${zip}" -C "${work}"`);
+  // Relative path + cwd avoids Windows tar's drive-letter colon issue.
+  execSync(`tar -xf btbn.zip`, { cwd: work });
   const binDir = join(work, readdirSync(work).find((d) => d.startsWith('ffmpeg-') && !d.endsWith('.zip')), 'bin');
   for (const tool of ['ffmpeg', 'ffprobe']) {
     const src = join(binDir, `${tool}.exe`);
