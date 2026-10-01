@@ -1,182 +1,213 @@
 # BrushLLM Video Studio
 
-本地、免费、完全离线的视频 / 音频 / 字幕处理工具箱。
-配色取自 [brushllm.pages.dev](https://brushllm.pages.dev),界面遵循 Apple 设计语言(macOS 隐藏标题栏、毛玻璃侧边栏、圆角卡片、分段控件)。
+**[🌐 brushllm.com](https://brushllm.com)** · [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases)
 
-> 当前版本的所有处理都在本机完成;后续 AI 功能(OCR/转写/超分)将按需联网。
-> v0.0.1 · 三平台独立安装包:macOS arm64(120 MB)/ Windows x64(166 MB)/ Windows arm64(144 MB),各自只含本平台引擎
+A local-first desktop video toolbox — every tool runs 100% on your device for free, offline and private.
 
-## 架构说明(重要)
+[English](#english) | [Deutsch](#deutsch) | [Español](#español) | [Français](#français) | [Português (BR)](#português-br) | [简体中文](#简体中文) | [繁體中文](#繁體中文) | [日本語](#日本語) | [한국어](#한국어)
 
-- **三平台 thin 打包**:`dist:mac-arm64` / `dist:win-x64` / `dist:win-arm64` 三个独立构建,各自只携带对应架构的 FFmpeg/ffprobe,不含其他架构代码,也不含开发用的 npm fallback 二进制
-- 引擎来源:macOS arm64 用 ffmpeg-static 6.0 + @ffprobe-installer(固定版本);Windows x64/arm64 统一用 BtbN FFmpeg-Builds n8.1(原生双架构,zip 内含 ffmpeg.exe + ffprobe.exe)
-- 二进制来源**固定版本 + SHA-256 校验**(`scripts/fetch-binaries.mjs`),下载后校验校验和、Mach-O/PE 架构并试运行(macOS 侧);`npm run dist` 前置校验 vendor 完整性,不在打包过程中隐式联网
-- `npm run fetch-binaries` 重建 `vendor/{darwin-arm64,win32-x64,win32-arm64}/`;`npm run measure` 输出各构件体积、二进制架构与 SHA-256 清单
-- 首次打开未签名应用:macOS 若被 Gatekeeper 拦截,执行 `xattr -cr "BrushLLM Video Studio.app"`;Windows 在 SmartScreen 提示中选择"仍要运行"
-- **Windows 发布门禁**:mac 上只能校验 Windows 二进制的架构与 SHA-256,无法执行;正式发布前请在真实 Windows 机器上跑一次 `npm run test:e2e` 和 `BRUSHVS_SMOKE=1` 冒烟测试
+---
 
-## 性能与防睡眠
+## English
 
-- **线程优化默认常开**:所有 FFmpeg 任务统一注入解码/滤镜/编码三层线程参数,VP9 额外启用 row-mt + tile-columns 并行(实测约 1.9x)。质量参数不受影响,无需任何设置。
-- **防睡眠**(设置页,默认开启):处理任务期间阻止系统进入睡眠(屏幕仍可关闭),队列空闲后自动恢复。
+### ✨ Features
 
-## 硬件加速(诚实策略)
+**All tools — free, offline, private (zero network requests):**
 
-- 启动时精确解析 `ffmpeg -encoders`,只有真实存在的 VideoToolbox/NVENC/QSV/AMF 才会出现在 UI
-- 格式转换/压缩提供「自动 / CPU / GPU」三档:自动 = 有硬件编码器就用(计划摘要显示 `H.264 (GPU)` + 实际码率),没有就明确标注「CPU 软件编码」;选 GPU 但不可用是硬错误,绝不静默回退
-- 带滤镜的操作(裁剪/缩放/旋转/烧录)保持 CPU 路径,避免硬件像素格式兼容性回归
-- GPU 编码用目标码率控制质量(VideoToolbox 无 CRF 语义),码率按分辨率自动缩放
-- 音频「自动」:容器兼容时直接流复制(计划显示「直接复制」),不兼容才重编码
+| Tool | What it does |
+| --- | --- |
+| Convert Format | MP4 / MKV / WebM / MOV / AVI × H.264 / H.265 / VP9 / AV1 |
+| Compress | Quality (CRF) or target bitrate — batch-capable |
+| Merge | Join clips into one — lossless when codecs match |
+| Trim / Cut | Time-range cutting, lossless by default |
+| Crop Frame | Cut off edges — aspect-ratio presets |
+| Scale | Resize with presets or custom — aspect preserved |
+| Rotate / Flip | 90 / 180 / 270° rotation, horizontal / vertical mirror |
+| Change Speed | 0.25–4× — video and audio together |
+| Mute | Remove the audio track without re-encoding |
+| Replace Audio | Swap in a new audio track |
+| Extract Audio | Save as MP3, M4A, FLAC, WAV, OGG, Opus |
+| Extract Frames | PNG / JPG stills or image sequences |
+| GIF / WebP | Animated GIF (two-pass palette) or WebP |
+| Embed Subtitles | Mux as switchable soft subtitle tracks |
+| Burn Subtitles | Render permanently into the picture |
+| Change Container | Repackage without re-encoding |
+| Metadata | Inspect streams, codecs and tags |
+| Audio Convert | MP3, M4A, FLAC, WAV, OGG, Opus |
+| Audio Trim | Lossless time-range cutting |
+| Volume | Adjust gain in decibels |
+| Loudness | Normalize to EBU R128 broadcast standard |
+| Subtitle Convert | SRT / VTT / ASS / SSA / TTML — instant |
+| Subtitle Shift | Move all cues earlier or later |
+| Subtitle Encoding | Fix legacy GBK / Big5 → UTF-8 |
+| Subtitle Extract | Pull subtitle tracks out of a video |
 
-## 性能基准
+**Highlights:** 9-language UI · hardware acceleration with honest GPU detection · batch processing · live CPU utilization display · prevent-sleep during processing · zero telemetry.
 
-`npm run benchmark` 用**真实 UI 解析管线**(resolve → commands)对固定输入做 1 次预热 + 3 次取中位的转码基准,并带质量门禁(输出可探测、编码器与计划一致、时长误差 ≤1 帧、PSNR):
+### 📥 Download
 
-| 场景 | 耗时(中位) | 编码器 | PSNR |
-|---|---|---|---|
-| CPU medium(旧默认) | 1.43s | libx264 | 45.6 dB |
-| CPU fast(新平衡默认) | 1.34s | libx264 | 45.5 dB |
-| GPU H.264(VideoToolbox) | 1.16s | h264_videotoolbox | 42.9 dB |
-| GPU H.265(VideoToolbox) | 1.23s | hevc_videotoolbox | 40.7 dB |
+Grab the latest installer from [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases):
 
-(合成测试源,实际视频的 GPU 优势通常更明显;报告存于 `benchmark-report.json`)
+| Platform | File |
+| --- | --- |
+| macOS (Apple Silicon) | `.dmg` |
+| Windows 11 x64 | `.exe` |
+| Windows 11 ARM64 | `.exe` |
 
-## 功能一览
+Apps are unsigned — macOS Gatekeeper / Windows SmartScreen show a first-run warning.
 
-### 视频(12 项,纯视频处理)
+### 🌐 Website
 
-按「转换 / 剪辑 / 画面 / 导出」分组;音轨与字幕操作分别在音频、字幕页(提供跨页快捷入口,不重复注册)。
+- Website: <https://brushllm.com>
 
-| 功能 | 说明 |
-|---|---|
-| 格式转换 | 四档用户预设(兼容性优先/平衡/高质量/小体积)+ 高级模式(codec/CRF/码率/编码速度);GPU 编码仅在真实检测到 VideoToolbox 等编码器时出现 |
-| 压缩 | 同上,保留源编码族 |
-| 封装转换 | 不重编码直接换容器 |
-| 裁切 / 剪辑 | 默认关键帧无损,可切精确模式(重编码) |
-| 合并 | concat 多段合一;编码一致时自动无损拼接 |
-| 调速 | 0.25–4×,视频音频同步变速(atempo 自动链式) |
-| 裁剪画面 | 自定义宽高偏移 + 比例预设 |
-| 缩放 | 1080p–360p 预设或自定义,保持比例或拉伸 |
-| 旋转 / 翻转 | 90 / 180 / 270° + 水平 / 垂直镜像 |
-| 提取帧 | 连拍序列(可调 fps)或单帧,PNG / JPG |
-| GIF / WebP 动图 | GIF 两遍调色板法,WebP 动画编码 |
-| 元数据查看 | ffprobe 流 / 编码 / 码率 / 标签,含原始 JSON |
-
-### 音频(8 项)
-
-转换 / 压缩 / 裁切 / 音量 / 响度标准化(EBU R128)处理音频文件;「音轨」组(从视频提取、去除音轨、替换音轨)以视频为主输入。
-
-### 字幕(6 项)
-
-- **格式互转**:SRT / VTT / ASS / SSA / TTML,自研解析引擎,即时完成
-- **时间轴平移**:整体提前 / 延后,可覆盖原文件
-- **编码转换**:自动检测 GBK / Big5 / Shift-JIS / EUC-KR / UTF-16,转 UTF-8
-- **字幕抽取 / 封装进视频 / 烧录进视频**(图形字幕 PGS/DVD 留待 AI 版)
-
-### 统一媒体摘要(source → plan → actual)
-
-选择操作后即显示输出预估卡:实际输出容器、编码器、质量/码率、时长、分辨率。CRF 模式如实显示「无法可靠预估大小」;目标码率模式给出估算;流复制显示「接近源文件大小」。任务完成后自动重新探测输出文件,在队列中显示**真实**的容器/大小/时长/码率。
-
-## 快速开始
+### 🛠 Develop
 
 ```bash
-npm install     # 安装依赖(含内置 ffmpeg / ffprobe 二进制)
-npm start       # 启动应用
+npm install
+npm run fetch-binaries   # download pinned FFmpeg/ffprobe (SHA-256 verified)
+npm start                # launch the app
 ```
 
-开发模式(热重载):
+Tests: `npm test` (175 items — unit + end-to-end with real FFmpeg).
 
-```bash
-npm run dev     # Vite dev server + Electron
-```
+### Architecture
 
-测试:
+- **UI** — React 18 + Vite in Electron. `src/pages` (tool pages) → `src/components` → `src/lib/bridge.js` (typed IPC wrappers).
+- **Engine** (`electron/engine`) — pure Node.js: `commands.js` (pure function: op + params → FFmpeg args, unit-tested), `queue.js` (job lifecycle, progress, pause/resume, CPU sampling), `resolve.mjs` (central encoding resolver shared by UI plan and actual command).
+- **Subtitle engine** (`shared/subtitles.js`) — pure JS, no dependencies: parse/write SRT, VTT, ASS, SSA, TTML; charset detection (UTF-8/GBK/Big5/Shift-JIS).
+- **Media engine** — pinned FFmpeg/ffprobe binaries per platform (SHA-256 verified), fetched via `scripts/fetch-binaries.mjs`.
+- **CI** — GitHub Actions builds all three platform installers on tag push.
 
-```bash
-npm test                    # 全部(单元 + 端到端)
-npm run test:unit           # 命令生成器 + 字幕引擎
-npm run test:e2e            # 真实 ffmpeg 跑全部操作并用 ffprobe 验证
-BRUSHVS_SMOKE=1 npx electron .   # 应用冒烟测试(渲染 + IPC)
-```
+### Known limitations
 
-打包:
+- Image-based subtitles (PGS/DVD) are not supported yet — planned for the AI version.
+- GPU acceleration uses VideoToolbox on macOS; NVENC/QSV/AMF code is ready but untested on Windows.
+- Apps are unsigned (code signing can be added to CI later).
 
-```bash
-npm run dist    # electron-builder → release/ 下的 dmg + zip
-```
+---
 
-## 架构
+## Deutsch
 
-```
-electron/                  主进程(CJS)
-├── main.js                窗口、IPC、设置持久化、GPU 编码器精确检测、入队前集中解析
-├── preload.js             contextBridge 安全 API(含 webUtils.getPathForFile)
-└── engine/
-    ├── binaries.js        ffmpeg/ffprobe 路径(vendor/<arch> → staging → 开发 fallback)
-    ├── probe.js           ffprobe 元数据
-    ├── commands.js        纯函数:操作+参数 → ffmpeg 参数(CRF/码率语义正确)
-    ├── prepare.js         字幕预处理(转 UTF-8、格式适配)
-    └── queue.js           任务队列、进度、取消/重试、失败清理、完成后 actual 探测
+Ein lokal-first Desktop-Werkzeugkasten für Video — alle Werkzeuge laufen kostenlos auf deinem Gerät, offline und privat.
 
-shared/
-├── subtitles.js           字幕引擎:5 种格式解析/写出、平移、编码检测(CJS)
-├── resolve.mjs            集中式编码解析器:硬件策略/容器约束/GPU 码率/音频 auto(ESM)
-├── plan.mjs               source/plan/actual 三层媒体摘要(调用 resolve,与命令一致)
-└── media.mjs              文件类型识别 + 各页面 accept 过滤(ESM)
+**Werkzeuge:** Format konvertieren · Komprimieren · Zusammenfügen · Schneiden · Rogneren · Skalieren · Drehen · Geschwindigkeit · Stummschalten · Audio ersetzen · Audio extrahieren · Einzelbilder · GIF/WebP · Untertitel einbetten · Untertitel einbrennen · Container wechseln · Metadaten · Audio konvertieren · Lautstärke · Lautheit · Untertitel konvertieren · Untertitel verschieben · Untertitel-Kodierung.
 
-vendor/<platform>-<arch>/  三平台 thin 二进制(固定版本 + SHA-256)
+**Highlights:** UI in 9 Sprachen · Hardware-Beschleunigung mit ehrlicher GPU-Erkennung · Stapelverarbeitung · CPU-Auslastung live · Ruhezustand verhindern · keine Telemetrie.
 
-src/                       渲染进程(React + Vite)
-├── i18n/                  9 语言 + 系统语言(280+ 键 × 9,含 parity 测试)
-├── ops.js                 操作注册表(分组/预设/硬件策略/高级模式)
-├── theme.css              brushllm 色板 + Apple 风格组件 + 窗口拖拽区
-├── components/            ToolPage / ParamPanel / MediaSummary / ExtraInput / …
-└── pages/                 Queue / Settings
+**📥 Herunterladen:** aktuelle Installationspakete auf [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Unsignierte Apps lösen beim ersten Start eine Warnung aus.
 
-scripts/
-├── fetch-binaries.mjs     固定版本下载 + SHA-256/架构/试运行三重校验
-├── stage-binaries.mjs     按目标平台/架构 staging,供 electron-builder 打包
-├── benchmark-transcode.mjs 转码基准 + 质量门禁(PSNR/编码器一致性/时长)
-└── measure-release.mjs    发布包体积/架构/SHA-256 测量
+**🌐 Website:** <https://brushllm.com>
 
-tests/                     node:test(153 项)
-├── unit/                  109 项:命令 + 字幕 + plan + media + resolve + i18n parity
-└── e2e/                   44 项:真实 ffmpeg 全操作 + plan/actual 一致性 + webm/无音轨输入
-```
+Entwicklung und Architektur findest du im Abschnitt [English](#english).
 
-设计要点:
+---
 
-- **无损优先**:裁切、合并、封装转换默认 stream copy,不重编码(参考 LosslessCut)
-- **命令可复现**:每个任务展示完整 ffmpeg 命令,可直接复制到终端
-- **纯函数命令构建**:`commands.js` 不做 IO,153 项测试直接覆盖参数正确性
-- **计划=命令=实际**:集中解析器(`shared/resolve.mjs`)统一决定实际编码器,UI 计划、命令文本、输出探测三者由测试保证一致;CRF 模式绝不携带默认码率
-- **诚实 UI**:GPU 选项只在真实检测到硬件编码器时出现;CRF 模式不伪造文件大小预估;WebM/AVI 强制换编码器时明确提示
-- **码率带单位**:所有码率输入以 kbps 为单位并校验范围,"1500" 永远是 1500 kbps
-- **字幕双引擎**:文本格式互转走自研 JS 引擎(即时、无依赖);抽取/封装/烧录走 ffmpeg
-- **浏览器可开发**:渲染层带 mock bridge,`npx vite` 即可在浏览器里开发调试 UI
+## Español
 
-## 界面语言
+Una caja de herramientas de vídeo local-first — todas las herramientas se ejecutan gratis en tu equipo, sin conexión y en privado.
 
-按产品标准顺序支持:系统语言(默认,跟随 macOS)→ Deutsch → English → Español → Français → Português (Brasil) → 日本語 → 简体中文 → 繁體中文 → 한국어。
+**Herramientas:** Convertir formato · Comprimir · Unir · Recortar · Recortar encuadre · Redimensionar · Rotar · Velocidad · Silenciar · Reemplazar audio · Extraer audio · Fotogramas · GIF/WebP · Incrustar subtítulos · Grabar subtítulos · Cambiar contenedor · Metadatos · Convertir audio · Volumen · Sonoridad · Convertir subtítulos · Desplazar subtítulos · Codificación de subtítulos.
 
-## 灵感与参考
+**Lo destacado:** interfaz en 9 idiomas · aceleración por hardware con detección honesta de GPU · proceso por lotes · uso de CPU en vivo · evitar suspensión · sin telemetría.
 
-本项目站在以下杰出开源项目的肩膀上:
+**📥 Descargar:** instaladores en [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Apps sin firmar: aviso al primer inicio.
 
-- [LosslessCut](https://github.com/mifi/lossless-cut)(44k⭐)— Electron + FFmpeg 架构、无损优先、命令日志
-- [HandBrake](https://github.com/HandBrake/HandBrake)(24k⭐)— 预设与批量队列模型
-- [Shutter Encoder](https://github.com/paulpacifico/shutter-encoder)(2.8k⭐)— 字幕内嵌/烧录、响度标准化、音轨替换
-- [Subtitle Edit](https://github.com/SubtitleEdit/subtitleedit)(14k⭐)— 字幕格式转换核心
+**🌐 Sitio web:** <https://brushllm.com>
 
-## AI 路线图(后期)
+Desarrollo y arquitectura, en la sección [English](#english).
 
-当前版本完全本地免费。后续计划接入的 AI 能力(架构已预留扩展点):
+---
 
-- 图形字幕 OCR(PGS/DVD → SRT,参考 Subtitle Edit 的 OCR 方向)
-- 语音转写字幕(Whisper 类本地模型)
-- 视频超分辨率、降噪、语音分离
+## Français
 
-## 许可
+Une boîte à outils vidéo local-first — tous les outils tournent gratuitement sur votre machine, hors ligne et en privé.
 
-- 应用代码:MIT
-- 内置 FFmpeg 二进制遵循 GPL,源码可在 [ffmpeg.org](https://ffmpeg.org) 获取;分发时请保留本说明
+**Outils :** Convertir le format · Compresser · Fusionner · Découper · Rogner · Redimensionner · Pivoter · Vitesse · Muer · Remplacer l'audio · Extraire l'audio · Images · GIF/WebP · Incorporer des sous-titres · Graver des sous-titres · Changer de conteneur · Métadonnées · Convertir l'audio · Volume · Sonie · Convertir les sous-titres · Décaler les sous-titres · Encodage des sous-titres.
+
+**Points forts :** interface en 9 langues · accélération matérielle avec détection honnête du GPU · traitement par lots · utilisation CPU en direct · éveiller pendant le traitement · zéro télémétrie.
+
+**📥 Télécharger :** installateurs sur [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Apps non signées : avertissement au premier lancement.
+
+**🌐 Site web :** <https://brushllm.com>
+
+Développement et architecture dans la section [English](#english).
+
+---
+
+## Português (BR)
+
+Uma caixa de ferramentas de vídeo local-first — todas as ferramentas rodam grátis na sua máquina, offline e com privacidade.
+
+**Ferramentas:** Converter formato · Comprimir · Unir · Recortar · Cortar quadro · Redimensionar · Girar · Velocidade · Silenciar · Substituir áudio · Extrair áudio · Quadros · GIF/WebP · Incorporar legendas · Gravar legendas · Trocar contêiner · Metadados · Converter áudio · Volume · Intensidade · Converter legendas · Deslocar legendas · Codificação de legendas.
+
+**Destaques:** interface em 9 idiomas · aceleração por hardware com detecção honesta de GPU · processamento em lote · uso de CPU ao vivo · evitar suspensão · zero telemetria.
+
+**📥 Baixar:** instaladores em [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Apps não assinados: aviso no primeiro início.
+
+**🌐 Site:** <https://brushllm.com>
+
+Desenvolvimento e arquitetura na seção [English](#english).
+
+---
+
+## 简体中文
+
+本地优先的桌面视频工具箱——所有工具 100% 在本机免费运行，离线且私密。
+
+**工具：** 格式转换 · 压缩 · 合并 · 裁切 · 裁剪画面 · 缩放 · 旋转 · 调速 · 静音 · 替换音轨 · 提取音频 · 提取帧 · GIF/WebP 动图 · 字幕内嵌 · 字幕烧录 · 封装转换 · 元数据 · 音频转换 · 音量 · 响度标准化 · 字幕格式转换 · 时间轴平移 · 编码转换。
+
+**亮点：** 九语言界面 · 硬件加速（诚实 GPU 检测）· 批量处理 · CPU 占用实时显示 · 处理时防睡眠 · 零遥测。
+
+**📥 下载：** 最新安装包见 [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases)——macOS `.dmg`、Windows `.exe`。应用未签名，首次运行会有系统提示。
+
+**🌐 网站：** <https://brushllm.com>
+
+开发与架构说明见 [English](#english) 章节。
+
+---
+
+## 繁體中文
+
+本機優先的桌面影片工具箱——所有工具 100% 在本機免費執行，離線且私密。
+
+**工具：** 格式轉換 · 壓縮 · 合併 · 裁切 · 裁剪畫面 · 縮放 · 旋轉 · 變速 · 靜音 · 替換音軌 · 擷取音訊 · 擷取影格 · GIF/WebP 動圖 · 字幕內嵌 · 字幕燒錄 · 封裝轉換 · 詮釋資料 · 音訊轉換 · 音量 · 響度標準化 · 字幕格式轉換 · 時間軸平移 · 編碼轉換。
+
+**亮點：** 九語言介面 · 硬體加速（誠實 GPU 偵測）· 批次處理 · CPU 佔用即時顯示 · 處理時防睡眠 · 零遙測。
+
+**📥 下載：** 最新安裝包見 [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases)——macOS `.dmg`、Windows `.exe`。應用程式未簽署，首次執行會有系統提示。
+
+**🌐 網站：** <https://brushllm.com>
+
+開發與架構說明見 [English](#english) 章節。
+
+---
+
+## 日本語
+
+ローカルファーストのデスクトップ動画ツールボックス — すべてのツールが 100% 端末上で無料で動作し、オフラインでプライベートです。
+
+**ツール：** フォーマット変換 · 圧縮 · 結合 · トリミング · クロップ · リサイズ · 回転 · 速度変更 · ミュート · 音声置換 · 音声抽出 · フレーム抽出 · GIF/WebP · 字幕埋め込み · 字幕焼き付け · コンテナ変更 · メタデータ · 音声変換 · 音量 · ラウドネス · 字幕変換 · タイミングシフト · エンコード修正。
+
+**ハイライト：** 9 言語 UI · ハードウェアアクセラレーション（誠実な GPU 検出）· 一括処理 · CPU 使用率のライブ表示 · 処理中のスリープ防止 · テレメトリなし。
+
+**📥 ダウンロード：** 最新のインストーラーは [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`、Windows `.exe`。未署名のため初回起動時に警告が出ます。
+
+**🌐 ウェブサイト：** <https://brushllm.com>
+
+開発とアーキテクチャは [English](#english) セクションをご覧ください。
+
+---
+
+## 한국어
+
+로컬 우선 데스크톱 비디오 도구함 — 모든 도구가 100% 기기에서 무료로 실행되며, 오프라인과 프라이버시를 보장합니다.
+
+**도구:** 포맷 변환 · 압축 · 병합 · 자르기 · 크롭 · 크기 조정 · 회전 · 속도 · 음소거 · 오디오 교체 · 오디오 추출 · 프레임 추출 · GIF/WebP · 자막 삽입 · 자막 굽기 · 컨테이너 변경 · 메타데이터 · 오디오 변환 · 볼륨 · 라우드니스 · 자막 변환 · 타이밍 조정 · 인코딩 수정.
+
+**하이라이트:** 9개 언어 UI · 하드웨어 가속 (정직한 GPU 감지) · 일괄 처리 · CPU 사용량 실시간 표시 · 처리 중 절전 방지 · 텔레메트리 없음.
+
+**📥 다운로드:** 최신 설치 파일은 [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. 미서명 앱이라 첫 실행 시 경고가 표시됩니다.
+
+**🌐 웹사이트:** <https://brushllm.com>
+
+개발 및 아키텍처는 [English](#english) 섹션을 참고하세요.
