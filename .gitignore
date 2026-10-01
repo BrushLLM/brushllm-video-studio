@@ -1,0 +1,21 @@
+node_modules/
+dist/
+dist-electron/
+release/
+staging/
+*.log
+.DS_Store
+
+# Media engine binaries (217 MB, exceeds GitHub's 100 MB file limit).
+# CI and developers fetch them via `npm run fetch-binaries` — pinned
+# versions with SHA-256 verification.
+vendor/
+
+# Local tool state
+.zcode/
+.zcodeignore
+
+# Generated artifacts
+benchmark-report.json
+tests/media/
+palette.png
