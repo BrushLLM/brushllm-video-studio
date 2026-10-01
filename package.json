@@ -1,0 +1,35 @@
+{
+  "name": "brushllm-video-studio",
+  "productName": "BrushLLM Video Studio",
+  "version": "0.0.1",
+  "description": "Local, free video / audio / subtitle toolbox. 100% offline.",
+  "author": "BrushLLM",
+  "license": "MIT",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build",
+    "test": "node --test \"tests/unit/*.test.js\" \"tests/e2e/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
+    "test:e2e": "node --test \"tests/e2e/*.test.js\"",
+    "fetch-binaries": "node scripts/fetch-binaries.mjs",
+    "benchmark": "node scripts/benchmark-transcode.mjs",
+    "measure": "node scripts/measure-release.mjs",
+    "dist": "npm run dist:mac-arm64 && npm run dist:win-x64 && npm run dist:win-arm64",
+    "dist:mac-arm64": "node scripts/stage-binaries.mjs darwin-arm64 && vite build && electron-builder --mac --arm64 --config.directories.output=release/mac-arm64-build",
+    "dist:win-x64": "node scripts/stage-binaries.mjs win32-x64 && vite build && electron-builder --win --x64 --config.directories.output=release/win-x64-build",
+    "dist:win-arm64": "node scripts/stage-binaries.mjs win32-arm64 && vite build && electron-builder --win --arm64 --config.directories.output=release/win-arm64-build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "ffmpeg-static": "^5.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.7"
+  }
+}
