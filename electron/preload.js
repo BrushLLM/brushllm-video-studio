@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('brushvs', {
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
 
   appInfo: () => ipcRenderer.invoke('app:info'),
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
 
   openFiles: (kind) => ipcRenderer.invoke('dialog:openFiles', kind),
   pickDirectory: () => ipcRenderer.invoke('dialog:pickDirectory'),

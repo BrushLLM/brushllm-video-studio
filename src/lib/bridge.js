@@ -33,6 +33,11 @@ function makeMock() {
       platform: 'darwin', arch: 'arm64', gpuEncoders: ['h264_videotoolbox', 'hevc_videotoolbox'],
       userData: '~/.mock'
     }),
+    checkForUpdate: async () => ({
+      hasUpdate: false, currentVersion: '0.0.1', latestVersion: '0.0.1',
+      releaseUrl: 'https://github.com/BrushLLM/brushllm-video-studio/releases',
+      releaseNotes: '', error: null
+    }),
     openFiles: async (kind) => {
       // Browsers can't hand out real paths; fabricate plausible ones.
       if (kind === 'mediaAndSubs') return ['/Users/demo/subtitle.srt'];

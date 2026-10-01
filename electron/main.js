@@ -237,6 +237,18 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// Semantic version comparison: returns >0 if a > b, 0 if equal, <0 if a < b.
+function compareVersions(a, b) {
+  const pa = String(a || '').split('.').map(Number);
+  const pb = String(b || '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na !== nb) return na - nb;
+  }
+  return 0;
+}
+
 function broadcast(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
@@ -404,13 +416,37 @@ function registerIpc() {
     shell.showItemInFolder(fs.existsSync(target) ? target : path.dirname(target));
   });
 
-  // External links (e.g. brushllm.com) open in the user's default browser.
-  const ALLOWED_EXTERNAL = /^https:\/\/(brushllm\.(com|pages\.dev)|www\.brushllm\.(com|pages\.dev))(\/|$)/;
+  // External links (e.g. brushllm.com, GitHub releases) open in the browser.
+  const ALLOWED_EXTERNAL = /^https:\/\/(brushllm\.(com|pages\.dev)|www\.brushllm\.(com|pages\.dev)|github\.com\/BrushLLM\/brushllm-video-studio)(\/|$)/;
   ipcMain.handle('shell:openExternal', (_e, url) => {
     const target = String(url);
     if (!ALLOWED_EXTERNAL.test(target)) return false;
     shell.openExternal(target);
     return true;
+  });
+
+  // ---- Update check: queries the GitHub latest release and compares ----
+  ipcMain.handle('update:check', async () => {
+    const current = app.getVersion();
+    try {
+      const res = await fetch('https://api.github.com/repos/BrushLLM/brushllm-video-studio/releases/latest', {
+        headers: { 'User-Agent': 'BrushLLM-Video-Studio' },
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!res.ok) return { hasUpdate: false, currentVersion: current, error: `HTTP ${res.status}` };
+      const release = await res.json();
+      const latest = (release.tag_name || '').replace(/^v/, '');
+      const hasUpdate = compareVersions(latest, current) > 0;
+      return {
+        hasUpdate,
+        currentVersion: current,
+        latestVersion: latest || current,
+        releaseUrl: release.html_url || '',
+        releaseNotes: (release.body || '').slice(0, 2000)
+      };
+    } catch (e) {
+      return { hasUpdate: false, currentVersion: current, error: e.message || 'network error' };
+    }
   });
 
   // ---- JS-side subtitle operations (instant, no queue) ----

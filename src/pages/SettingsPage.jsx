@@ -7,8 +7,34 @@ export default function SettingsPage({ settings, setSettings }) {
   const { t } = useI18n();
   const [info, setInfo] = useState(null);
   const [ffmpegPath, setFfmpegPath] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null); // { latestVersion, releaseUrl, releaseNotes }
+  const [toast, setToast] = useState(null);
 
   useEffect(() => { bridge.appInfo().then(setInfo); }, []);
+
+  const showToast = (msg, kind = 'success') => {
+    setToast({ msg, kind });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const checkForUpdate = async () => {
+    setChecking(true);
+    try {
+      const result = await bridge.checkForUpdate();
+      if (result.error) {
+        showToast(t('settings.updateCheckFailed'), 'error');
+      } else if (result.hasUpdate) {
+        setUpdateInfo(result);
+      } else {
+        showToast(t('settings.upToDate'));
+      }
+    } catch {
+      showToast(t('settings.updateCheckFailed'), 'error');
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const update = async (patch) => {
     const next = await bridge.setSettings(patch);
@@ -109,11 +135,19 @@ export default function SettingsPage({ settings, setSettings }) {
 
       <div className="card settings-group">
         <h2>{t('settings.about')}</h2>
-        <dl className="about-grid">
-          <dt>{t('settings.version')}</dt><dd>{info?.version || '1.0.0'}</dd>
-          <dt>Electron</dt><dd>{info?.electron || '—'}</dd>
-          <dt>FFmpeg</dt><dd>{info ? '6.0' : '—'}</dd>
-        </dl>
+        <div className="setting-row" style={{ marginBottom: 12 }}>
+          <div>
+            <dl className="about-grid">
+              <dt>{t('settings.version')}</dt><dd>{info?.version || '1.0.0'}</dd>
+              <dt>Electron</dt><dd>{info?.electron || '—'}</dd>
+              <dt>FFmpeg</dt><dd>{info ? '6.0' : '—'}</dd>
+            </dl>
+          </div>
+          <button className="btn btn-secondary" disabled={checking} onClick={checkForUpdate}>
+            <Icon name="rotate" size={13} className={checking ? 'spin' : ''} />
+            {checking ? '…' : t('settings.checkUpdate')}
+          </button>
+        </div>
         <div style={{ marginTop: 12 }}>
           <div className="setting-label">{t('settings.references')}</div>
           <div style={{ marginTop: 6 }}>
@@ -135,6 +169,41 @@ export default function SettingsPage({ settings, setSettings }) {
           </div>
         )}
       </div>
+
+      {updateInfo && (
+        <div className="modal-overlay" onClick={() => setUpdateInfo(null)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{t('settings.updateAvailable', { version: updateInfo.latestVersion })}</h3>
+              <button className="icon-btn" onClick={() => setUpdateInfo(null)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {updateInfo.releaseNotes && (
+                <>
+                  <div className="setting-label">{t('settings.updateNotes')}</div>
+                  <pre className="update-notes">{updateInfo.releaseNotes}</pre>
+                </>
+              )}
+            </div>
+            <div className="modal-foot">
+              <button className="btn btn-secondary" onClick={() => setUpdateInfo(null)}>{t('common.close')}</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  bridge.openExternal(updateInfo.releaseUrl);
+                  setUpdateInfo(null);
+                }}
+              >
+                {t('settings.goToDownload')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div className={`toast show ${toast.kind}`}>{toast.msg}</div>}
     </div>
   );
 }
