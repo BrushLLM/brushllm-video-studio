@@ -11,11 +11,7 @@
 <p align="center">A local-first desktop video toolbox — every tool runs 100% on your device for free, offline and private.</p>
 
 <p align="center">
-  <img src=".github/assets/video-page.png" width="800" alt="Video Tools">
-</p>
-
-<p align="center">
-  <img src=".github/assets/queue-page.png" width="800" alt="Processing Queue">
+  <img src=".github/assets/screenshot.png" width="800" alt="BrushLLM Video Studio">
 </p>
 
 [English](#english) | [Deutsch](#deutsch) | [Español](#español) | [Français](#français) | [Português (BR)](#português-br) | [简体中文](#简体中文) | [繁體中文](#繁體中文) | [日本語](#日本語) | [한국어](#한국어)
