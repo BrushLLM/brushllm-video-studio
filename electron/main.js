@@ -520,5 +520,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Quit on all platforms — this is a utility app, not a document editor.
+  // Users expect closing the window to exit the app.
+  app.quit();
 });
