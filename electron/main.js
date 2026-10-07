@@ -7,6 +7,8 @@ const { probe, summarize } = require('./engine/probe');
 const { JobManager } = require('./engine/queue');
 const { outputExtFor } = require('./engine/commands');
 const subs = require('../shared/subtitles');
+const { DEFAULT_SETTINGS, normalizeSettings, validateEngine, saveSettingsFile } = require('./settings');
+const { writeNewFile, replaceWithBackup } = require('./engine/artifacts');
 
 let mainWindow = null;
 let settings = null;
@@ -16,26 +18,42 @@ let buildPlan = null; // ESM modules, loaded at boot
 let resolveEncoding = null;
 let applyResolved = null;
 
-const DEFAULT_SETTINGS = {
-  language: 'system',
-  ffmpegPath: '',
-  ffprobePath: '',
-  outputDir: '',
-  concurrency: 1,
-  preventSleep: true
-};
+let assertValidOperation = null;
+let supportedGpuEncoders = [];
+let engineReady = Promise.resolve();
+let settingsUpdate = Promise.resolve();
+const probeControllers = new Set();
+let quitting = false;
+let quitReady = false;
+
+async function probeInput(filePath) {
+  if (quitting) throw new Error('The application is shutting down');
+  if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) throw new Error('Invalid input path');
+  if (!fs.statSync(filePath).isFile()) throw new Error('Input is not a regular file');
+  const controller = new AbortController();
+  probeControllers.add(controller);
+  try {
+    const { ffprobe } = applyBinaries();
+    return await probe(ffprobe, filePath, { signal: controller.signal });
+  } finally { probeControllers.delete(controller); }
+}
 
 const CPU_COUNT = require('node:os').cpus().length;
 
 function settingsPath() {
-  return path.join(app.getPath('userData'), 'settings.json');
+  const userData = app.getPath('userData');
+  const resolved = path.resolve(userData, 'settings.json');
+  if (!resolved.startsWith(userData)) throw new Error('Invalid settings path');
+  return resolved;
 }
 
 function loadSettings() {
   try {
     const raw = fs.readFileSync(settingsPath(), 'utf8');
-    const loaded = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-    delete loaded.fullSpeed; // legacy key from the removed full-speed mode
+    const loaded = normalizeSettings(JSON.parse(raw));
+    for (const [key, name] of [['ffmpegPath', 'ffmpeg'], ['ffprobePath', 'ffprobe']]) {
+      try { validateEngine(loaded[key], name); } catch { loaded[key] = ''; }
+    }
     return loaded;
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -43,8 +61,7 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
-  fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2), 'utf8');
+  saveSettingsFile(settingsPath(), settings);
 }
 
 function applyBinaries() {
@@ -56,23 +73,25 @@ function applyBinaries() {
 // Detect hardware encoders that actually exist in the bundled ffmpeg.
 // Only these may be surfaced as "GPU" options in the UI — parsed precisely
 // from encoder lines, never by substring guessing.
-const KNOWN_GPU_ENCODERS = ['h264_videotoolbox', 'hevc_videotoolbox', 'h264_nvenc', 'hevc_nvenc', 'h264_qsv', 'hevc_qsv', 'h264_amf', 'hevc_amf'];
-
 async function detectGpuEncoders() {
   const { ffmpeg } = applyBinaries();
   return new Promise((resolve) => {
-    const child = require('node:child_process').spawn(ffmpeg, ['-hide_banner', '-encoders']);
+    const child = require('node:child_process').spawn(ffmpeg, ['-hide_banner', '-encoders'], { windowsHide: true });
     let out = '';
-    child.stdout.on('data', (d) => (out += d));
-    child.on('error', () => resolve([]));
-    child.on('close', () => {
-      // Encoder lines look like: " V....D h264_videotoolbox    VideoToolbox H.264 Encoder (codec h264)"
+    let failed = false;
+    const timer = setTimeout(() => { failed = true; child.kill('SIGKILL'); }, 5000);
+    child.stdout.on('data', (d) => { out = (out + d).slice(-1024 * 1024); });
+    child.stderr.resume();
+    child.on('error', () => { failed = true; });
+    child.on('close', (code) => {
+      clearTimeout(timer);
       const names = new Set();
       for (const line of out.split('\n')) {
         const m = line.match(/^\s*[A-Z.]{4,6}\s+([a-zA-Z0-9_]+)\s+\S/);
         if (m) names.add(m[1]);
       }
-      gpuEncoders = KNOWN_GPU_ENCODERS.filter((e) => names.has(e));
+      gpuEncoders = failed || code !== 0 ? [] : supportedGpuEncoders.filter((e) => names.has(e));
+      broadcast('engine:updated', { gpuEncoders, ffmpegPath: ffmpeg });
       resolve(gpuEncoders);
     });
   });
@@ -110,29 +129,14 @@ const OP_SUFFIX = {
   'subtitle.burn': 'burned'
 };
 
-function uniquePath(p) {
-  if (!fs.existsSync(p)) return p;
-  const dir = path.dirname(p);
-  const ext = path.extname(p);
-  const base = path.basename(p, ext);
-  for (let i = 1; i < 1000; i++) {
-    const candidate = path.join(dir, `${base}-${i}${ext}`);
-    if (!fs.existsSync(candidate)) return candidate;
-  }
-  return path.join(dir, `${base}-${Date.now()}${ext}`);
-}
-
 function resolveOutputPath(op, params, inputPath, summary, outputDirOverride) {
   const baseDir = outputDirOverride || settings.outputDir || path.dirname(inputPath);
   const baseName = path.basename(inputPath, path.extname(inputPath));
   const suffix = OP_SUFFIX[op] || 'out';
 
-  if (op === 'video.extractFrames') {
-    const dir = uniquePath(path.join(baseDir, `${baseName}-frames`));
-    return path.join(dir, 'frame');
-  }
+  if (op === 'video.extractFrames') return path.join(baseDir, `${baseName}-frames`);
   const ext = outputExtFor(op, params, inputPath, { probe: summary });
-  return uniquePath(path.join(baseDir, `${baseName}-${suffix}${ext}`));
+  return path.join(baseDir, `${baseName}-${suffix}${ext}`);
 }
 
 // ------------------------------------------------------------------- app
@@ -274,15 +278,27 @@ function syncSleepBlocker() {
 function registerIpc() {
   ipcMain.handle('settings:get', () => settings);
   ipcMain.handle('settings:set', (_e, patch) => {
-    settings = { ...settings, ...patch };
-    saveSettings();
-    applyBinaries();
-    manager.setConcurrency(settings.concurrency);
-    syncSleepBlocker();
-    return settings;
+    const update = settingsUpdate.then(async () => {
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid settings');
+      const next = normalizeSettings({ ...settings, ...patch }, { strict: true });
+      const changedEngine = next.ffmpegPath !== settings.ffmpegPath || next.ffprobePath !== settings.ffprobePath;
+      if (changedEngine && manager.activeCount()) throw new Error('Finish or cancel active jobs before changing the engine');
+      validateEngine(next.ffmpegPath, 'ffmpeg');
+      validateEngine(next.ffprobePath, 'ffprobe');
+      saveSettingsFile(settingsPath(), next);
+      settings = next;
+      applyBinaries();
+      manager.setConcurrency(settings.concurrency);
+      syncSleepBlocker();
+      if (changedEngine) { engineReady = detectGpuEncoders(); await engineReady; }
+      return settings;
+    });
+    settingsUpdate = update.catch(() => {});
+    return update;
   });
 
-  ipcMain.handle('app:info', () => {
+  ipcMain.handle('app:info', async () => {
+    await engineReady;
     const { ffmpeg } = applyBinaries();
     return {
       version: app.getVersion(),
@@ -332,88 +348,80 @@ function registerIpc() {
   });
 
   ipcMain.handle('probe:file', async (_e, filePath) => {
-    const { ffprobe } = applyBinaries();
-    const raw = await probe(ffprobe, filePath);
-    return { raw, summary: summarize(raw) };
+    await engineReady;
+    const raw = await probeInput(filePath);
+    return { raw, summary: summarize(raw, filePath) };
   });
 
   // specs: [{ op, params, inputs, outputDir? }]
   ipcMain.handle('jobs:add', async (_e, specs) => {
-    const added = [];
+    await settingsUpdate;
+    await engineReady;
+    if (quitting) throw new Error('The application is shutting down');
+    if (!Array.isArray(specs) || !specs.length || specs.length > 1000) throw new Error('Invalid job batch');
+    const pending = [];
     for (const spec of specs) {
-      if (!Array.isArray(spec.inputs) || !spec.inputs.length) continue;
-      const { ffprobe } = applyBinaries();
-      let summary = {};
-      let allProbes = [];
-      try {
-        allProbes = [];
-        for (const input of spec.inputs) {
-          allProbes.push(summarize(await probe(ffprobe, input)));
-        }
-        summary = allProbes[0] || {};
-      } catch {
-        /* ffmpeg will surface the error */
+      if (!spec || typeof spec !== 'object' || Array.isArray(spec)) throw new Error('Invalid job specification');
+      if (!Object.hasOwn(OP_SUFFIX, spec.op)) throw new Error('Invalid operation');
+      if (!Array.isArray(spec.inputs) || !spec.inputs.length || spec.inputs.length > 100) throw new Error('Invalid inputs');
+      if (spec.inputs.some((p) => typeof p !== 'string' || !path.isAbsolute(p) || p.includes('\0'))) throw new Error('Invalid input path');
+      if (!spec.params || typeof spec.params !== 'object' || Array.isArray(spec.params)) throw new Error('Invalid params');
+      if (spec.outputDir !== undefined && (typeof spec.outputDir !== 'string' || !path.isAbsolute(spec.outputDir) || spec.outputDir.includes('\0'))) throw new Error('Invalid output directory');
+      const allProbes = [];
+      for (const input of spec.inputs) {
+        if (/\.(srt|vtt|ass|ssa|ttml|xml|dfxp)$/i.test(input)) { allProbes.push(null); continue; }
+        allProbes.push(summarize(await probeInput(input), input));
       }
-      const outputPath = resolveOutputPath(spec.op, spec.params, spec.inputs[0], summary, spec.outputDir);
-
-      // Central resolution: the job enters the queue with the SAME effective
-      // encoder/quality the plan preview showed (GPU strategy, audio auto-copy,
-      // CRF-vs-bitrate). commands.js keeps its own constraints as defense.
-      let finalParams = spec.params;
-      if (resolveEncoding) {
-        const resolved = resolveEncoding(spec.op, spec.params, summary, { gpuEncoders });
-        if (resolved.error === 'gpu-unavailable') {
-          throw new Error('GPU_UNAVAILABLE');
-        }
-        finalParams = applyResolved(spec.params, resolved);
-      }
-      const plan = buildPlan ? buildPlan(spec.op, spec.params, summary, { allProbes, gpuEncoders }) : null;
-      const job = await manager.add({
-        op: spec.op,
-        params: finalParams,
-        inputs: spec.inputs,
-        outputPath,
-        expectedDuration: summary.durationSec || 0,
-        plan,
-        probes: allProbes
-      });
-      added.push(job);
+      const summary = allProbes[0] || {};
+      assertValidOperation(spec.op, spec.params, summary, { allProbes });
+      const resolved = resolveEncoding(spec.op, spec.params, summary, { gpuEncoders });
+      if (resolved.error) throw new Error(resolved.error);
+      const finalParams = applyResolved(spec.params, resolved);
+      const outputPath = resolveOutputPath(spec.op, finalParams, spec.inputs[0], summary, spec.outputDir);
+      pending.push({ op: spec.op, params: finalParams, requestedParams: spec.params,
+        inputs: spec.inputs, outputPath, gpuEncoders: [...gpuEncoders],
+        framesDirectory: spec.op === 'video.extractFrames' ? outputPath : undefined,
+        plan: buildPlan(spec.op, spec.params, summary, { allProbes, gpuEncoders }) });
     }
+    const added = [];
+    for (const spec of pending) added.push(await manager.add(spec));
     return added;
   });
 
   ipcMain.handle('jobs:list', () => manager.list());
-  ipcMain.handle('jobs:cancel', (_e, id) => manager.cancel(id));
-  ipcMain.handle('jobs:retry', (_e, id) => manager.retry(id));
-  ipcMain.handle('jobs:remove', (_e, id) => manager.remove(id));
-  ipcMain.handle('jobs:pause', (_e, id) => manager.pause(id));
-  ipcMain.handle('jobs:resume', (_e, id) => manager.resume(id));
+  ipcMain.handle('jobs:cancel', (_e, id) => {
+    if (typeof id !== 'string') throw new Error('Invalid job id');
+    return manager.cancel(id);
+  });
+  ipcMain.handle('jobs:retry', (_e, id) => {
+    if (typeof id !== 'string') throw new Error('Invalid job id');
+    return manager.retry(id);
+  });
+  ipcMain.handle('jobs:remove', (_e, id) => {
+    if (typeof id !== 'string') throw new Error('Invalid job id');
+    return manager.remove(id);
+  });
+  ipcMain.handle('jobs:pause', (_e, id) => {
+    if (typeof id !== 'string') throw new Error('Invalid job id');
+    return manager.pause(id);
+  });
+  ipcMain.handle('jobs:resume', (_e, id) => {
+    if (typeof id !== 'string') throw new Error('Invalid job id');
+    return manager.resume(id);
+  });
   ipcMain.handle('jobs:canPause', () => manager.constructor.canPause);
 
   // Delete a job's output file from disk (delete-confirmation dialog).
-  ipcMain.handle('files:delete', (_e, filePath) => {
-    const p = String(filePath || '');
-    if (!p) return { ok: false, error: 'empty path' };
-    try {
-      if (p.includes('%05d')) {
-        // Frame-sequence outputs live in their own generated directory.
-        const dir = path.dirname(p);
-        if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
-        return { ok: true };
-      }
-      if (fs.existsSync(p)) {
-        const stat = fs.statSync(p);
-        if (!stat.isFile()) return { ok: false, error: 'not a file' };
-        fs.rmSync(p, { force: true });
-      }
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e.message };
-    }
+  ipcMain.handle('files:delete', (_e, jobId) => {
+    if (typeof jobId !== 'string') throw new Error('Invalid job id');
+    return manager.deleteOutput(jobId);
   });
-  ipcMain.handle('shell:reveal', (_e, p) => {
-    const target = String(p).replace(/%05d[^/]*$/, '');
-    shell.showItemInFolder(fs.existsSync(target) ? target : path.dirname(target));
+  ipcMain.handle('shell:reveal', (_e, jobId) => {
+    if (typeof jobId !== 'string') throw new Error('Invalid job id');
+    const artifact = manager.jobs.get(jobId)?.artifact;
+    if (!artifact) return false;
+    shell.showItemInFolder(artifact.directory || artifact.outputPath);
+    return true;
   });
 
   // External links (e.g. brushllm.com, GitHub releases) open in the browser.
@@ -450,42 +458,65 @@ function registerIpc() {
   });
 
   // ---- JS-side subtitle operations (instant, no queue) ----
-  ipcMain.handle('subtitle:convert', (_e, { filePath, targetFormat }) => {
+  const subtitlePath = (filePath) => {
+    if (typeof filePath !== 'string' || !path.isAbsolute(filePath) || !fs.statSync(filePath).isFile()) throw new Error('Invalid subtitle path');
+    return filePath;
+  };
+  const assertReadableSubtitle = (result) => {
+    if (result.ambiguous) {
+      const error = new Error('Subtitle encoding is ambiguous; select the source encoding before changing this file.');
+      error.code = 'SUBTITLE_CHARSET_AMBIGUOUS';
+      throw error;
+    }
+    if (!(result.cueCount > 0)) throw new Error('No subtitle cues were parsed; the original file was not changed.');
+  };
+  ipcMain.handle('subtitle:convert', (_e, { filePath, targetFormat, sourceCharset }) => {
+    subtitlePath(filePath);
     const buf = fs.readFileSync(filePath);
-    const result = subs.convertBuffer(buf, targetFormat);
-    const dir = path.dirname(filePath);
+    const result = subs.convertBuffer(buf, targetFormat, { sourceCharset });
+    assertReadableSubtitle(result);
     const base = path.basename(filePath, path.extname(filePath));
-    const out = uniquePath(path.join(dir, `${base}${subs.extOfFormat(targetFormat)}`));
-    fs.writeFileSync(out, result.buffer);
+    const out = writeNewFile(path.join(path.dirname(filePath), `${base}${subs.extOfFormat(targetFormat)}`), result.buffer);
     return { outputPath: out, cueCount: result.cueCount, fromFormat: result.fromFormat, charset: result.charset };
   });
 
-  ipcMain.handle('subtitle:shift', (_e, { filePaths, offsetMs, inPlace }) => {
+  ipcMain.handle('subtitle:shift', (_e, { filePaths, offsetMs, inPlace, sourceCharset }) => {
+    if (!Array.isArray(filePaths) || !filePaths.length || !Number.isFinite(Number(offsetMs))) throw new Error('Invalid subtitle shift request');
     const results = [];
-    for (const filePath of filePaths) {
+    for (const selectedPath of filePaths) {
+      const filePath = subtitlePath(selectedPath);
       const buf = fs.readFileSync(filePath);
-      const result = subs.shiftBuffer(buf, offsetMs);
-      const dir = path.dirname(filePath);
+      const result = subs.shiftBuffer(buf, Number(offsetMs), { sourceCharset });
+      assertReadableSubtitle(result);
       const ext = path.extname(filePath);
       const base = path.basename(filePath, ext);
-      const out = inPlace ? filePath : uniquePath(path.join(dir, `${base}-shifted${ext}`));
-      fs.writeFileSync(out, result.buffer);
-      results.push({ input: filePath, outputPath: out, cueCount: result.cueCount });
+      const outputPath = inPlace
+        ? replaceWithBackup(filePath, buf, result.buffer).outputPath
+        : writeNewFile(path.join(path.dirname(filePath), `${base}-shifted${ext}`), result.buffer);
+      results.push({ input: filePath, outputPath, cueCount: result.cueCount });
     }
     return results;
   });
 
-  ipcMain.handle('subtitle:reencode', (_e, { filePaths, charset, inPlace }) => {
+  ipcMain.handle('subtitle:reencode', (_e, { filePaths, charset, inPlace, sourceCharset }) => {
+    if (!Array.isArray(filePaths) || !filePaths.length || typeof charset !== 'string') throw new Error('Invalid subtitle encoding request');
     const results = [];
-    for (const filePath of filePaths) {
+    for (const selectedPath of filePaths) {
+      const filePath = subtitlePath(selectedPath);
       const buf = fs.readFileSync(filePath);
-      const result = subs.reencodeBuffer(buf, charset);
-      const dir = path.dirname(filePath);
+      const result = subs.reencodeBuffer(buf, charset, { sourceCharset });
+      const decoded = subs.decodeBuffer(buf, { sourceCharset });
+      if (decoded.ambiguous) {
+        const error = new Error('Subtitle encoding is ambiguous; select the source encoding before changing this file.');
+        error.code = 'SUBTITLE_CHARSET_AMBIGUOUS';
+        throw error;
+      }
       const ext = path.extname(filePath);
       const base = path.basename(filePath, ext);
-      const out = inPlace ? filePath : uniquePath(path.join(dir, `${base}-${charset}${ext}`));
-      fs.writeFileSync(out, result.buffer);
-      results.push({ input: filePath, outputPath: out, fromCharset: result.fromCharset });
+      const outputPath = inPlace
+        ? replaceWithBackup(filePath, buf, result.buffer).outputPath
+        : writeNewFile(path.join(path.dirname(filePath), `${base}-${charset}${ext}`), result.buffer);
+      results.push({ input: filePath, outputPath, fromCharset: result.fromCharset });
     }
     return results;
   });
@@ -500,14 +531,17 @@ app.whenReady().then(async () => {
     manager = new JobManager({ ffmpeg, ffprobe, concurrency: settings.concurrency || 1 });
     manager.on('updated', (job) => { broadcast('jobs:updated', job); syncSleepBlocker(); });
     manager.on('removed', (id) => { broadcast('jobs:removed', id); syncSleepBlocker(); });
+    // Resolve shared ESM contracts and hardware support before exposing IPC/UI.
+    engineReady = (async () => {
+      ({ buildPlan } = await import('../shared/plan.mjs'));
+      ({ resolveEncoding, applyResolved, SUPPORTED_GPU_ENCODERS: supportedGpuEncoders } = await import('../shared/resolve.mjs'));
+      ({ assertValidOperation } = await import('../shared/validation.mjs'));
+      await detectGpuEncoders();
+    })();
+    await engineReady;
     registerIpc();
     buildMenu();
     createWindow();
-    // shared/plan.mjs and resolve.mjs are ESM (shared with the renderer); CJS
-    // loads them dynamically.
-    ({ buildPlan } = await import('../shared/plan.mjs'));
-    ({ resolveEncoding, applyResolved } = await import('../shared/resolve.mjs'));
-    await detectGpuEncoders();
   } catch (e) {
     const { dialog } = require('electron');
     dialog.showErrorBox('BrushLLM Video Studio', String(e.message || e));
@@ -519,8 +553,23 @@ app.whenReady().then(async () => {
   });
 });
 
+app.on('before-quit', (event) => {
+  if (quitReady || !manager) return;
+  event.preventDefault();
+  if (quitting) return;
+  quitting = true;
+  for (const controller of probeControllers) controller.abort();
+  manager.shutdown().finally(() => {
+    quitReady = true;
+    if (sleepBlockerId != null) {
+      powerSaveBlocker.stop(sleepBlockerId);
+      sleepBlockerId = null;
+    }
+    app.quit();
+  });
+});
+
 app.on('window-all-closed', () => {
   // Quit on all platforms — this is a utility app, not a document editor.
-  // Users expect closing the window to exit the app.
   app.quit();
 });

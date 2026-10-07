@@ -117,8 +117,14 @@ export default function App() {
       if (info?.platform) setPlatform(info.platform);
     });
     bridge.listJobs().then(setJobs);
-    const off = bridge.onJobsUpdated(() => {
-      bridge.listJobs().then(setJobs);
+    const off = bridge.onJobsUpdated((job) => {
+      setJobs((prev) => {
+        const index = prev.findIndex((item) => item.id === job.id);
+        if (index < 0) return [...prev, job];
+        const next = [...prev];
+        next[index] = job;
+        return next;
+      });
     });
     return off;
   }, []);
@@ -142,17 +148,22 @@ export default function App() {
   };
 
   // "Open in <section> tools": carry the current section's compatible files over.
+  // Reset requestToken to trigger fresh probing in the target section.
   const transfer = (target) => {
     const current = filesBySection[page] || [];
     const { accepted } = filterForSection(current.map((f) => f.path), target);
     if (accepted.length) {
       setSectionFiles(target, (prev) => {
+        const requestToken = Date.now() + Math.random();
         const known = new Set(prev.map((f) => f.path));
         const fresh = accepted
           .filter((p) => !known.has(p))
           .map((p) => {
             const existing = current.find((f) => f.path === p);
-            return existing || { path: p, name: p.split(/[/\\]/).pop(), kind: 'video', probing: false, probe: null, raw: null };
+            if (existing) {
+              return { ...existing, probing: false, requestToken };
+            }
+            return { path: p, name: p.split(/[/\\]/).pop(), kind: 'video', probing: false, probe: null, raw: null, requestToken };
           });
         return [...prev, ...fresh];
       });

@@ -1,15 +1,16 @@
 // File-kind detection, container identity and stream contracts shared by UI/planning.
-import contract from './media-contract.json' with { type: 'json' };
+const contract = require('./media-contract.json');
 
-export const { audioFormats: AUDIO_FORMATS, audioCodecExtensions: AUDIO_CODEC_EXTENSIONS } = contract;
+const AUDIO_FORMATS = contract.audioFormats;
+const AUDIO_CODEC_EXTENSIONS = contract.audioCodecExtensions;
 
-export function containerOfPath(filePath) {
+function containerOfPath(filePath) {
   const ext = (String(filePath || '').match(/\.([^.\\/]+)$/) || [])[1]?.toLowerCase();
   return contract.pathContainers[ext] || null;
 }
 
 // ffprobe reports demuxer aliases, NOT an unambiguous container identity.
-export function containerOfSource(source = {}) {
+function containerOfSource(source = {}) {
   if (source.container) return source.container;
   const byPath = containerOfPath(source.sourcePath);
   if (byPath) return byPath;
@@ -18,16 +19,16 @@ export function containerOfSource(source = {}) {
   return ({ matroska: 'mkv' })[aliases[0]] || contract.pathContainers[aliases[0]] || null;
 }
 
-export function editContainer(source = {}) {
+function editContainer(source = {}) {
   const c = containerOfSource(source);
   return ['mp4', 'mkv', 'mov'].includes(c) ? c : 'mp4';
 }
 
-export function audioOutputExtension(codec) {
+function audioOutputExtension(codec) {
   return AUDIO_CODEC_EXTENSIONS[codec] || '.mka';
 }
 
-export function displaySize(video = {}) {
+function displaySize(video = {}) {
   const [n, d] = String(video.sampleAspectRatio || '1:1').split(/[:/]/).map(Number);
   let width = Math.max(2, Math.round(Number(video.width) * (n > 0 && d > 0 ? n / d : 1) / 2) * 2);
   let height = Math.max(2, Math.round(Number(video.height) / 2) * 2);
@@ -35,7 +36,7 @@ export function displaySize(video = {}) {
   return { width, height };
 }
 
-export function mergeCopyCompatibility(probes = []) {
+function mergeCopyCompatibility(probes = []) {
   if (probes.length < 2) return { compatible: false, reason: 'At least two complete probes are required for copy merge' };
   let first;
   for (const p of probes) {
@@ -97,4 +98,6 @@ function inputFilesForOp(files, inputKind) {
   return files.filter((f) => f.kind === inputKind);
 }
 
-export { fileKindOf, acceptsFor, filterForSection, inputFilesForOp, VIDEO_EXTS, AUDIO_EXTS, SUBTITLE_EXTS };
+
+
+module.exports = { containerOfPath, containerOfSource, editContainer, audioOutputExtension, displaySize, mergeCopyCompatibility, AUDIO_FORMATS, AUDIO_CODEC_EXTENSIONS, fileKindOf, filterForSection, inputFilesForOp, acceptsFor, VIDEO_EXTS, AUDIO_EXTS, SUBTITLE_EXTS };

@@ -1,209 +1,111 @@
-// Central effective-encoding resolver — the single source of truth shared by
-// the plan summary (renderer), job submission (main) and the consistency
-// tests. commands.js applies the same container rules as final defense.
-//
-// Everything that decides "which encoder actually runs" lives here:
-//   - hardware strategy (auto / cpu / gpu) against really-detected encoders
-//   - container constraints (WebM forces VP9+Opus, AVI forces MPEG-4)
-//   - GPU encoders are bitrate-driven (no CRF semantics on VideoToolbox)
-//   - CRF mode never carries a target bitrate
-//   - audio "auto": stream copy when the container can hold the source codec
+// Effective encoding for filterless transcodes ONLY. Other operations own their
+// stream mappings and mode semantics (merge/scale modes are not rate control).
+import contract from './media-contract.json' with { type: 'json' };
+import { containerOfSource } from './media.mjs';
+import { validateOperation } from './validation.mjs';
 
-export const GPU_H264_BY_PREFERENCE = ['h264_videotoolbox', 'h264_nvenc', 'h264_qsv', 'h264_amf'];
-export const GPU_HEVC_BY_PREFERENCE = ['hevc_videotoolbox', 'hevc_nvenc', 'hevc_qsv', 'hevc_amf'];
-const ALL_GPU = new Set([...GPU_H264_BY_PREFERENCE, ...GPU_HEVC_BY_PREFERENCE]);
+export const SUPPORTED_GPU_ENCODERS = Object.freeze([...contract.gpuEncoders]);
+export const GPU_H264_BY_PREFERENCE = ['h264_videotoolbox'];
+export const GPU_HEVC_BY_PREFERENCE = ['hevc_videotoolbox'];
+export const COPYABLE_AUDIO = contract.copyableAudio;
+export function isGpuEncoder(codec) { return SUPPORTED_GPU_ENCODERS.includes(codec); }
+const family = codec => isGpuEncoder(codec) ? codec.split('_')[0] : codec;
+const defaults = { mp4: 'aac', mov: 'aac', mkv: 'aac', webm: 'opus', avi: 'mp3' };
+const tiers = { compat: 6000, balanced: 5000, quality: 8000, small: 3500 };
+const num = (value, fallback) => value == null || value === '' || !Number.isFinite(Number(value)) ? fallback : Number(value);
 
-export { COPYABLE_AUDIO };
-
-export function isGpuEncoder(codec) {
-  return ALL_GPU.has(codec);
+export function containerForcedVideo(container, codec) {
+  if (container === 'webm') return ['vp8', 'vp9', 'av1'].includes(codec) ? codec : 'vp9';
+  if (container === 'avi' && !['mpeg4', 'copy'].includes(codec)) return 'mpeg4';
+  return codec;
 }
 
-// Container constraints — mirrored in commands.js (consistency-tested).
-export function containerForcedVideo(container, videoCodec) {
-  if (container === 'webm') {
-    return ['vp9', 'vp8'].includes(videoCodec) ? videoCodec : 'vp9';
-  }
-  if (container === 'avi') {
-    if (['h264', 'hevc', 'av1', ...GPU_H264_BY_PREFERENCE, ...GPU_HEVC_BY_PREFERENCE].includes(videoCodec)) return 'mpeg4';
-  }
-  return videoCodec;
-}
-
-// Which source audio codecs each container can hold without re-encoding.
-const COPYABLE_AUDIO = {
-  mp4: ['aac', 'mp3', 'ac3', 'eac3', 'alac'],
-  mov: ['aac', 'mp3', 'ac3', 'eac3', 'alac'],
-  mkv: ['aac', 'mp3', 'ac3', 'eac3', 'flac', 'opus', 'vorbis', 'alac'],
-  webm: ['opus', 'vorbis'],
-  avi: ['mp3', 'pcm_s16le', 'ac3']
-};
-const CONTAINER_AUDIO_DEFAULT = { mp4: 'aac', mov: 'aac', mkv: 'aac', webm: 'opus', avi: 'mp3' };
-
-// GPU bitrate defaults per quality preset at 1080p, scaled by resolution.
-const GPU_BITRATE_TIERS = { compat: 6000, balanced: 5000, quality: 8000, small: 3500 };
-
-function num(v, fallback) {
-  const n = Number(v);
-  return isFinite(n) ? n : fallback;
-}
-
-// Resolution-scaled default GPU bitrate (kbps), clamped to a sane range.
 export function defaultGpuBitrate(preset, source) {
-  const base = GPU_BITRATE_TIERS[preset] || GPU_BITRATE_TIERS.balanced;
-  const w = num(source && source.video && source.video.width, 1920);
-  const h = num(source && source.video && source.video.height, 1080);
-  const scale = (w * h) / (1920 * 1080);
-  return Math.round(Math.min(60000, Math.max(1500, base * Math.max(0.25, scale))));
+  const scale = num(source?.video?.width, 1920) * num(source?.video?.height, 1080) / (1920 * 1080);
+  return Math.round(Math.min(60000, Math.max(1500, (tiers[preset] || tiers.balanced) * Math.max(0.25, scale))));
 }
 
-function pickGpuFor(codec, gpuEncoders) {
-  const list = codec === 'hevc' ? GPU_HEVC_BY_PREFERENCE : GPU_H264_BY_PREFERENCE;
-  return list.find((e) => gpuEncoders.includes(e)) || null;
+export function mpeg4Quality(crf) {
+  return Math.max(2, Math.min(31, Math.round(num(crf, 20) * 29 / 51 + 2)));
 }
 
-function resolveAudio(container, audioCodec, source) {
-  const srcCodec = (source && source.audio && source.audio.codec) || '';
-  const copyable = (COPYABLE_AUDIO[container] || []).includes(srcCodec);
-  if (audioCodec === 'auto') {
-    return {
-      audioCodec: copyable ? 'copy' : (CONTAINER_AUDIO_DEFAULT[container] || 'aac'),
-      audioCopy: copyable && Boolean(srcCodec)
-    };
-  }
-  if (audioCodec === 'copy') {
-    // Forced copy that the container cannot hold falls back to re-encode,
-    // matching commands.js (which cannot copy an incompatible stream either).
-    return copyable
-      ? { audioCodec: 'copy', audioCopy: true }
-      : { audioCodec: CONTAINER_AUDIO_DEFAULT[container] || 'aac', audioCopy: false };
-  }
-  // Explicit codec the container rejects (e.g. AAC into WebM).
-  if (container === 'webm' && !['opus', 'vorbis'].includes(audioCodec)) {
-    return { audioCodec: 'opus', audioCopy: false };
-  }
-  return { audioCodec, audioCopy: false };
-}
-
-// Compress keeps the source codec family when no explicit codec/preset
-// decided one (advanced mode has no codec picker for compress).
-function sourceFamilyCodec(source) {
-  const src = (source && source.video && source.video.codec) || '';
-  return ['h264', 'hevc', 'vp9', 'av1'].includes(src) ? src : 'h264';
-}
-
-// Resolve the encoding that will ACTUALLY run.
-// params: UI params (hwStrategy, qualityPreset already resolved into codec by
-//         ops.js engineParams, or an explicit advanced videoCodec).
-// opts:   { gpuEncoders = [] } — encoders really present in the ffmpeg build.
-// Returns { ...effective fields, hw, cpuNote, audioCopy, container } or
-//         { error: 'gpu-unavailable' } when the user demanded GPU and none exists.
 export function resolveEncoding(op, params, source, opts = {}) {
   const p = params || {};
-  const gpuEncoders = (opts && opts.gpuEncoders) || [];
-
-  // Only filterless transcodes participate in hardware acceleration; visual
-  // edit ops (crop/scale/rotate/burn) keep the CPU path.
-  const HW_ELIGIBLE = ['video.convert', 'video.compress'];
-  const hwEligible = HW_ELIGIBLE.includes(op);
-
+  if (!['video.convert', 'video.compress'].includes(op)) return { passthrough: true, hw: false, cpuNote: false };
+  const errors = validateOperation(op, p, source);
+  if (errors.length) return { error: errors[0].message, issues: errors };
+  const sourceContainer = containerOfSource(source || {});
   const container = op === 'video.compress'
-    ? containerOfSource(source)
-    : (p.container || 'mp4');
-
-  // 1. Base codec: explicit (advanced) or preset-resolved; compress without
-  //    either keeps the source codec family.
-  let videoCodec = p.videoCodec || (op === 'video.compress' ? sourceFamilyCodec(source) : 'h264');
-
-  // An explicit GPU encoder under a CPU strategy is a conflict — the strategy
-  // wins and the codec is downgraded to its CPU equivalent (never the other
-  // way around, so the UI can never claim GPU while running CPU).
-  if (isGpuEncoder(videoCodec) && hwEligible && p.hwStrategy === 'cpu') {
-    videoCodec = videoCodec.startsWith('hevc') ? 'hevc' : 'h264';
-  }
-
-  // 2. Hardware strategy.
-  const strategy = hwEligible ? (p.hwStrategy || 'auto') : 'cpu';
+    ? (contract.containers[sourceContainer] ? sourceContainer : 'mp4')
+    : p.container || 'mp4';
+  if (!contract.containers[container]) return { error: `Unsupported output container: ${container}` };
+  const srcFamily = ['h264', 'hevc', 'vp8', 'vp9', 'av1', 'mpeg4'].includes(source?.video?.codec) ? source.video.codec : 'h264';
+  let videoCodec = p.videoCodec || (op === 'video.compress' ? srcFamily : 'h264');
+  if (!contract.videoEncoders[videoCodec]) return { error: `Unsupported video encoder: ${videoCodec}` };
+  const strategy = p.hwStrategy || 'auto';
+  if (!['auto', 'cpu', 'gpu'].includes(strategy)) return { error: 'Unsupported hardware strategy' };
+  if (strategy === 'cpu') videoCodec = family(videoCodec);
+  const forced = containerForcedVideo(container, videoCodec);
+  if (strategy === 'gpu' && (forced !== videoCodec || !['h264', 'hevc'].includes(family(videoCodec)))) return { error: 'gpu-container-conflict' };
+  videoCodec = forced;
+  if (container === 'mov' && !(contract.copyableVideo.mov.includes(family(videoCodec)))) return { error: `MOV does not support ${videoCodec}; choose MP4/MKV or a compatible video codec` };
+  if (videoCodec === 'copy' && !contract.copyableVideo[container].includes(source?.video?.codec)) return { error: `Cannot copy source video to ${container}` };
   let hw = false;
   let cpuNote = false;
-  if (hwEligible && strategy !== 'cpu' && !['vp9', 'av1', 'mpeg4'].includes(videoCodec)) {
-    const gpu = pickGpuFor(videoCodec === 'hevc' ? 'hevc' : 'h264', gpuEncoders);
-    if (gpu) {
-      videoCodec = gpu;
-      hw = true;
-    } else if (strategy === 'gpu') {
-      return { error: 'gpu-unavailable' };
-    } else {
-      cpuNote = true; // auto → honest CPU fallback
-    }
-  }
-
-  // 3. Container constraints (may drop GPU, e.g. WebM cannot hold H.264).
-  const forcedVideo = containerForcedVideo(container, videoCodec);
-  if (forcedVideo !== videoCodec) {
-    videoCodec = forcedVideo;
-    hw = false;
-    cpuNote = true;
-  }
-
-  // 4. Quality mode. GPU encoders are bitrate-driven; CRF never carries a
-  //    target bitrate — that mismatch was the original plan/command bug.
-  let mode = p.mode || 'crf';
-  let crf = num(p.crf, 20);
-  let videoBitrate = num(p.videoBitrate, 0);
   if (isGpuEncoder(videoCodec)) {
+    // An explicitly resolved GPU encoder stays concrete: main.js already
+    // validated it against the detected snapshot when it chose this codec.
+    hw = true;
+    if (strategy === 'cpu') {
+      videoCodec = family(videoCodec);
+      hw = false;
+      cpuNote = true;
+    }
+  } else if (strategy !== 'cpu' && ['h264', 'hevc'].includes(family(videoCodec))) {
+    const target = `${family(videoCodec)}_videotoolbox`;
+    if ((opts.gpuEncoders || []).includes(target)) { videoCodec = target; hw = true; }
+    else if (strategy === 'gpu') return { error: 'gpu-unavailable' };
+    else cpuNote = true;
+  }
+  let mode = p.rateControl || p.mode || 'crf';
+  let crf = num(p.crf, 20);
+  let videoBitrate = num(p.videoBitrate, null);
+  let qscale = null;
+  if (hw) {
     mode = 'bitrate';
     if (!(videoBitrate > 0)) videoBitrate = defaultGpuBitrate(p.qualityPreset, source);
     crf = null;
-  } else {
-    if (mode !== 'bitrate') {
-      videoBitrate = null; // CRF mode must not leak a default bitrate
-    } else {
-      crf = null;
+  } else if (mode === 'bitrate') crf = null;
+  else {
+    videoBitrate = null;
+    if (videoCodec === 'mpeg4') { mode = 'qscale'; qscale = num(p.qscale, mpeg4Quality(crf)); crf = null; }
+    else mode = 'crf';
+  }
+  let audioCodec = p.audioCodec || 'auto';
+  const srcAudio = source?.audio?.codec;
+  const canCopy = COPYABLE_AUDIO[container].includes(srcAudio);
+  if (audioCodec === 'auto' || audioCodec === 'copy') audioCodec = canCopy ? 'copy' : defaults[container];
+  else {
+    const canonical = contract.audioFormats[audioCodec]?.codec || audioCodec;
+    if (!contract.audioEncoders[audioCodec]) return { error: `Unsupported audio encoder: ${audioCodec}` };
+    if (!COPYABLE_AUDIO[container].includes(canonical)) {
+      if (container === 'mov') return { error: `MOV does not support ${canonical}; choose a compatible audio codec` };
+      audioCodec = defaults[container];
     }
   }
-
-  // 5. Audio: auto = copy when the container can hold it.
-  const audio = resolveAudio(container, p.audioCodec || 'auto', source);
-
-  return {
-    container,
-    videoCodec,
-    audioCodec: audio.audioCodec,
-    audioCopy: audio.audioCopy,
-    mode,
-    crf,
-    videoBitrate: videoBitrate > 0 ? Math.round(videoBitrate) : null,
-    encodeSpeed: p.encodeSpeed || 'fast',
-    audioBitrate: num(p.audioBitrate, 128),
-    hw,
-    cpuNote,
-    qualityPreset: p.qualityPreset || null
+  const resolved = {
+    container, videoCodec, audioCodec, audioCopy: Boolean(srcAudio) && audioCodec === 'copy',
+    mode, crf, qscale, videoBitrate: videoBitrate > 0 ? Math.round(videoBitrate) : null,
+    encodeSpeed: p.encodeSpeed || 'fast', audioBitrate: num(p.audioBitrate, 128),
+    hw, cpuNote, qualityPreset: p.qualityPreset || null
   };
+  const finalErrors = validateOperation(op, { ...p, ...resolved }, source);
+  return finalErrors.length ? { error: finalErrors[0].message, issues: finalErrors } : resolved;
 }
 
-function containerOfSource(src) {
-  const name = (src && src.formatName) || '';
-  if (name.includes('webm')) return 'webm';
-  if (name.includes('matroska')) return 'mkv';
-  if (name.includes('avi')) return 'avi';
-  if (name.includes('mp4')) return 'mp4';
-  if (name.includes('mov')) return 'mov';
-  return 'mp4';
-}
-
-// Merge resolved values back into engine params (used by main.js before the
-// job enters the queue, so commands.js receives final values).
 export function applyResolved(params, resolved) {
-  return {
-    ...params,
-    container: resolved.container,
-    videoCodec: resolved.videoCodec,
-    audioCodec: resolved.audioCodec,
-    mode: resolved.mode,
-    crf: resolved.crf,
-    videoBitrate: resolved.videoBitrate,
-    encodeSpeed: resolved.encodeSpeed,
-    audioBitrate: resolved.audioBitrate
-  };
+  if (!resolved || resolved.passthrough) return { ...params };
+  if (resolved.error) throw new Error(resolved.error);
+  const { container, videoCodec, audioCodec, mode, crf, qscale, videoBitrate, encodeSpeed, audioBitrate } = resolved;
+  return { ...params, container, videoCodec, audioCodec, mode, crf, qscale, videoBitrate, encodeSpeed, audioBitrate };
 }

@@ -15,21 +15,13 @@
 // or on GPU encoders (VideoToolbox has no CRF) — see shared/resolve.mjs.
 
 function useBitrate(codec, p) {
-  return p.mode === 'bitrate' || isGpu(codec);
+  return (p.rateControl || p.mode) === 'bitrate' || isGpu(codec);
 }
 
-const VIDEO_ENCODERS = {
-  h264: 'libx264',
-  hevc: 'libx265',
-  vp9: 'libvpx-vp9',
-  av1: 'libsvtav1',
-  mpeg4: 'mpeg4',
-  h264_videotoolbox: 'h264_videotoolbox',
-  hevc_videotoolbox: 'hevc_videotoolbox',
-  copy: 'copy'
-};
-
-const GPU_ENCODERS = new Set(['h264_videotoolbox', 'hevc_videotoolbox']);
+const contract = require('../../shared/media-contract.json');
+const { mergeCopyCompatibility } = require('../../shared/media.cjs');
+const VIDEO_ENCODERS = contract.videoEncoders;
+const GPU_ENCODERS = new Set(contract.gpuEncoders);
 
 // Per-codec "encode speed" mapping (replaces the x264-only preset list).
 // SVT-AV1: 0 (slowest/best) .. 13 (fastest). VP9 cpu-used: 0..5 (5 fastest).
@@ -37,33 +29,9 @@ const SVT_SPEED = { slow: 4, medium: 6, fast: 8 };
 const VP9_CPU = { slow: 2, medium: 4, fast: 5 };
 const X264_SPEED = { slow: 'slow', medium: 'medium', fast: 'fast' };
 
-const AUDIO_ENCODERS = {
-  aac: 'aac',
-  mp3: 'libmp3lame',
-  opus: 'libopus',
-  flac: 'flac',
-  wav: 'pcm_s16le',
-  vorbis: 'libvorbis',
-  copy: 'copy'
-};
-
-const CONTAINERS = {
-  mp4: { ext: '.mp4', f: 'mp4' },
-  mkv: { ext: '.mkv', f: 'matroska' },
-  webm: { ext: '.webm', f: 'webm' },
-  mov: { ext: '.mov', f: 'mov' },
-  avi: { ext: '.avi', f: 'avi' }
-};
-
-const AUDIO_FORMATS = {
-  mp3: { ext: '.mp3', enc: 'libmp3lame' },
-  m4a: { ext: '.m4a', enc: 'aac' },
-  aac: { ext: '.aac', enc: 'aac' },
-  flac: { ext: '.flac', enc: 'flac' },
-  wav: { ext: '.wav', enc: 'pcm_s16le' },
-  ogg: { ext: '.ogg', enc: 'libvorbis' },
-  opus: { ext: '.opus', enc: 'libopus' }
-};
+const AUDIO_ENCODERS = contract.audioEncoders;
+const CONTAINERS = contract.containers;
+const AUDIO_FORMATS = contract.audioFormats;
 
 // Near-transparent re-encode used by visual edit ops (crop / rotate / burn...).
 const EDIT_ENCODE = ['-c:v', 'libx264', '-crf', '18', '-preset', 'medium'];
@@ -71,11 +39,7 @@ const EDIT_ENCODE = ['-c:v', 'libx264', '-crf', '18', '-preset', 'medium'];
 // Which source audio codecs each re-encode output container can hold.
 // Mirrors COPYABLE_AUDIO in shared/resolve.mjs (consistency-tested): Opus or
 // Vorbis copied into MP4 "succeeds" but plays in almost no real player.
-const REENCODE_COPYABLE_AUDIO = {
-  mp4: ['aac', 'mp3', 'ac3', 'eac3', 'alac'],
-  mov: ['aac', 'mp3', 'ac3', 'eac3', 'alac'],
-  mkv: ['aac', 'mp3', 'ac3', 'eac3', 'flac', 'opus', 'vorbis', 'alac']
-};
+const REENCODE_COPYABLE_AUDIO = contract.copyableAudio;
 
 // Audio args for re-encoding ops: copy only when the output container can
 // actually hold the source codec, otherwise re-encode to AAC.
@@ -91,13 +55,15 @@ const PROGRESS_ARGS = ['-progress', 'pipe:1', '-nostats'];
 
 function secToTime(s) {
   if (s == null || !isFinite(s) || s < 0) s = 0;
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
+  const ms = Math.round(Number(s) * 1000);
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor(ms / 60000) % 60;
+  const sec = (ms % 60000) / 1000;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${sec.toFixed(3).padStart(6, '0')}`;
 }
 
 function num(v, fallback) {
+  if (v == null || v === '') return fallback;
   const n = Number(v);
   return isFinite(n) ? n : fallback;
 }
@@ -110,7 +76,8 @@ function isGpu(codec) {
 function videoEncodeArgs(codec, q) {
   codec = codec || 'h264';
   if (codec === 'copy') return ['-c:v', 'copy'];
-  const enc = VIDEO_ENCODERS[codec] || 'libx264';
+  const enc = VIDEO_ENCODERS[codec];
+  if (!enc) throw new Error(`Unsupported video encoder: ${codec}`);
   const args = ['-c:v', enc];
   const speed = (q && q.encodeSpeed) || 'medium';
   const bitrateK = q && Number(q.bitrate);
@@ -186,15 +153,20 @@ function atempoChain(factor) {
 function trimArgs(params) {
   const start = num(params.startSec, 0);
   const end = params.endSec != null && params.endSec !== '' ? num(params.endSec, 0) : null;
-  const args = start > 0 ? ['-ss', secToTime(start)] : [];
-  if (end != null && end > start) args.push('-t', (end - start).toFixed(3));
-  return args;
+  // -ss stays input-side (fast seek); the duration cap is output-side so the
+  // muxed file can never exceed the requested range through packet preroll.
+  const inputArgs = start > 0 ? ['-ss', secToTime(start)] : [];
+  const duration = end != null && end > start ? (end - start).toFixed(3) : null;
+  return { inputArgs, outputArgs: duration ? ['-t', duration] : [] };
 }
 
 function concatListContent(paths) {
-  // ffmpeg concat demuxer quoting: backslash and quote escaped with backslash.
+  // ffmpeg concat demuxer quoting: inside single quotes, a single quote must
+  // be closed, escaped, and reopened ('\''); backslashes outside quotes are
+  // literal. Escaping backslashes INSIDE the quoted span is wrong — ffmpeg
+  // then looks for a doubled backslash in the actual filename.
   return paths
-    .map((p) => `file '${String(p).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`)
+    .map((p) => `file '${String(p).replace(/'/g, "'\\''")}'`)
     .join('\n') + '\n';
 }
 
@@ -266,47 +238,92 @@ const builders = {
     const container = p.container === 'source' ? containerOf(inputs[0]) : p.container || 'mp4';
     let mode = p.mode || 'auto';
     if (mode === 'auto') {
-      const codecs = (ctx.allProbes || []).map(
-        (x) => `${x.video ? x.video.codec : '-'}|${x.audio ? x.audio.codec : '-'}`
-      );
-      const same = codecs.every((c) => c === codecs[0]);
-      mode = same ? 'copy' : 'reencode';
+      const compatibility = mergeCopyCompatibility(ctx.allProbes || []);
+      mode = compatibility.compatible ? 'copy' : 'reencode';
     }
-    const args = ['-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', 'concat.txt'];
     if (mode === 'copy') {
-      args.push('-map', '0', '-c', 'copy', ...containerExtras(container, null));
-    } else {
-      args.push(
-        ...videoEncodeArgs(p.videoCodec || 'h264', {
-          crf: p.crf,
-          bitrate: useBitrate(p.videoCodec || 'h264', p) ? p.videoBitrate : undefined,
-          encodeSpeed: p.encodeSpeed
-        }),
-        ...audioEncodeArgs(p.audioCodec || 'aac', p.audioBitrate || 160),
-        ...containerExtras(container, p.videoCodec || 'h264')
-      );
+      // Strict copy: only when every stream parameter matches. Incomplete
+      // metadata (e.g. unit-test stubs without full probes) is rejected so a
+      // silent timeline corruption can never pass as "copy".
+      const compatibility = mergeCopyCompatibility(ctx.allProbes || []);
+      if (!compatibility.compatible) throw new Error(compatibility.reason);
+      const args = ['-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+        '-map', '0', '-c', 'copy', ...containerExtras(container, null),
+        ...PROGRESS_ARGS, out];
+      return {
+        steps: [{ args, label: 'merge' }],
+        auxFiles: [{ name: 'concat.txt', content: concatListContent(inputs) }]
+      };
     }
-    args.push(...PROGRESS_ARGS, out);
-    return {
-      steps: [{ args, label: 'merge' }],
-      auxFiles: [{ name: 'concat.txt', content: concatListContent(inputs) }]
-    };
+    // Re-encode merge: decode every input separately and normalize video
+    // (size/SAR/fps) plus audio (rate/channels/layout) through the concat
+    // filter, so mixed codecs, differing time bases and missing audio tracks
+    // cannot silently drop later segments.
+    const probes = (ctx.allProbes || []);
+    const firstVideo = probes.map((x) => x && x.video).find(Boolean) || {};
+    const targetW = Math.max(2, 2 * Math.round((firstVideo.width || 640) / 2));
+    const targetH = Math.max(2, 2 * Math.round((firstVideo.height || 360) / 2));
+    const targetFps = firstVideo.fps && firstVideo.fps >= 1 ? Math.min(60, Math.round(firstVideo.fps * 100) / 100) : 30;
+    const firstAudio = probes.map((x) => x && x.audio).find(Boolean) || null;
+    const audioRate = firstAudio && firstAudio.sampleRate ? firstAudio.sampleRate : 48000;
+    const audioChannels = firstAudio && firstAudio.channels ? Math.min(2, firstAudio.channels) : 2;
+    const videoLabels = [];
+    const audioLabels = [];
+    const inputArgs = [];
+    inputs.forEach((input, i) => {
+      inputArgs.push('-i', input);
+      const hasAudio = Boolean(probes[i] && probes[i].audio);
+      videoLabels.push(`[${i}:v]scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${targetFps}[v${i}]`);
+      audioLabels.push(hasAudio
+        ? `[${i}:a]aresample=${audioRate}:first_pts=0,aformat=channel_layouts=stereo[a${i}]`
+        : `anullsrc=channel_layout=stereo:sample_rate=${audioRate}:duration=${Math.max(0.1, Number((probes[i] && probes[i].durationSec) || 0)).toFixed(3)}[a${i}]`);
+    });
+    const filter = [
+      ...videoLabels,
+      ...audioLabels,
+      `${videoLabels.map((_, i) => `[v${i}]`).join('')}concat=n=${inputs.length}:v=1:a=0[vout]`,
+      `${audioLabels.map((_, i) => `[a${i}]`).join('')}concat=n=${inputs.length}:v=0:a=1[aout]`
+    ].join(';');
+    const args = [
+      '-hide_banner', '-y', ...inputArgs,
+      '-filter_complex', filter,
+      '-map', '[vout]', '-map', '[aout]',
+      ...videoEncodeArgs(p.videoCodec || 'h264', {
+        crf: p.crf,
+        bitrate: useBitrate(p.videoCodec || 'h264', p) ? p.videoBitrate : undefined,
+        encodeSpeed: p.encodeSpeed
+      }),
+      // 1s keyframes so downstream lossless trims land predictably.
+      '-force_key_frames', 'expr:gte(t,n_forced*1)',
+      ...audioEncodeArgs(p.audioCodec || 'aac', p.audioBitrate || 160),
+      ...containerExtras(container, p.videoCodec || 'h264'),
+      ...PROGRESS_ARGS, out
+    ];
+    return { steps: [{ args, label: 'merge' }] };
   },
 
   'video.trim'(p, inputs, out, ctx) {
     const pre = trimArgs(p);
+    // The duration cap goes on the OUTPUT side: an input-side -t limits only
+    // demuxed packets, and audio preroll can still push the muxed duration
+    // past the requested range.
     if (!p.precise) {
       const args = [
-        '-hide_banner', '-y', ...pre, '-i', inputs[0],
-        '-map', '0', '-c', 'copy', '-avoid_negative_ts', 'make_zero',
+        '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0],
+        '-map', '0', '-c', 'copy',
+        // NB: avoid_negative_ts=make_zero mutates timestamps during muxing and
+        // breaks the output -t cap with stream copy (measured: a 4s request
+        // produced 5.27s). Input -ss already yields non-negative timestamps.
+        ...pre.outputArgs,
         ...PROGRESS_ARGS, out
       ];
       return { steps: [{ args, label: 'trim' }] };
     }
     const args = [
-      '-hide_banner', '-y', ...pre, '-i', inputs[0],
+      '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0],
       ...EDIT_ENCODE, ...reencodeAudioArgs(out, ctx),
       ...containerExtras(containerOf(out), 'h264'),
+      ...pre.outputArgs,
       ...PROGRESS_ARGS, out
     ];
     return { steps: [{ args, label: 'trim' }] };
@@ -457,25 +474,26 @@ const builders = {
     const scale = `fps=${fps},scale=${width}:-1:flags=lanczos`;
     if (p.format === 'webp') {
       const args = [
-        '-hide_banner', '-y', ...pre, '-i', inputs[0],
+        '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0],
         '-vf', scale,
         '-c:v', 'libwebp_anim', '-quality', String(num(p.quality, 75)),
         '-loop', num(p.loop, 0), '-an',
+        ...pre.outputArgs,
         ...PROGRESS_ARGS, out
       ];
       return { steps: [{ args, label: 'webp' }] };
     }
     // GIF: two-pass palette approach for much better quality.
     const pass1 = [
-      '-hide_banner', '-y', ...pre, '-i', inputs[0],
+      '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0],
       '-vf', `${scale},palettegen=max_colors=${num(p.colors, 128)}`,
-      '-an', ...PROGRESS_ARGS, 'palette.png'
+      '-an', ...pre.outputArgs, ...PROGRESS_ARGS, 'palette.png'
     ];
     const pass2 = [
-      '-hide_banner', '-y', ...pre, '-i', inputs[0], '-i', 'palette.png',
+      '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0], '-i', 'palette.png',
       '-filter_complex',
       `[0:v]${scale}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4`,
-      '-an', ...PROGRESS_ARGS, out
+      '-an', ...pre.outputArgs, ...PROGRESS_ARGS, out
     ];
     return { steps: [{ args: pass1, label: 'palette' }, { args: pass2, label: 'gif' }] };
   },
@@ -522,9 +540,27 @@ const builders = {
     const args = [
       '-hide_banner', '-y', '-i', inputs[0],
       '-map', '0', '-c', 'copy',
-      ...containerExtras(container, (ctx.probe && ctx.probe.video && ctx.probe.video.codec)),
-      ...PROGRESS_ARGS, out
+      ...containerExtras(container, (ctx.probe && ctx.probe.video && ctx.probe.video.codec))
     ];
+    // Cross-container subtitle remux: text subtitles must be converted for the
+    // target container (subrip cannot be copied into MP4; mov_text cannot be
+    // copied into MKV). Image-based subs (PGS/DVD) cannot convert — drop them
+    // rather than fail the whole remux, matching "may drop incompatible tracks".
+    const subCodecs = (ctx.probe && ctx.probe.subtitleStreams || []).map((s) => s.codec);
+    const needsSubtitleConversion = subCodecs.some((codec) => !contract.copyableSubtitle[container].includes(codec));
+    if (needsSubtitleConversion) {
+      const convertible = subCodecs.every((codec) => codec === 'subrip' || codec === 'webvtt' || codec === 'ass' || codec === 'ssa' || codec === 'mov_text');
+      if (convertible) {
+        // Replace the blanket -c copy with per-stream encoding.
+        const copyIndex = args.indexOf('-c');
+        args.splice(copyIndex, 2);
+        args.push('-c:v', 'copy', '-c:a', 'copy', '-c:s', container === 'mp4' || container === 'mov' ? 'mov_text' : 'srt');
+      } else {
+        // Image subtitles: drop subtitle streams instead of failing.
+        args.push('-sn');
+      }
+    }
+    args.push(...PROGRESS_ARGS, out);
     return { steps: [{ args, label: 'remux' }] };
   },
 
@@ -568,8 +604,8 @@ const builders = {
   'audio.trim'(p, inputs, out) {
     const pre = trimArgs(p);
     const args = [
-      '-hide_banner', '-y', ...pre, '-i', inputs[0],
-      '-c:a', 'copy', ...PROGRESS_ARGS, out
+      '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0],
+      '-c:a', 'copy', ...pre.outputArgs, ...PROGRESS_ARGS, out
     ];
     return { steps: [{ args, label: 'trim' }] };
   },

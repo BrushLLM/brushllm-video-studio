@@ -34,20 +34,32 @@ export default function SettingsPage({ settings, setSettings }) {
   };
 
   const update = async (patch) => {
-    const next = await bridge.setSettings(patch);
-    setSettings(next);
+    try {
+      const next = await bridge.setSettings(patch);
+      setSettings(next);
+    } catch (e) {
+      setUpdateStatus({ msg: t('settings.saveFailed'), kind: 'error' });
+    }
   };
 
   const pickOutputDir = async () => {
-    const dir = await bridge.pickDirectory();
-    if (dir) update({ outputDir: dir });
+    try {
+      const dir = await bridge.pickDirectory();
+      if (dir) await update({ outputDir: dir });
+    } catch (e) {
+      setUpdateStatus({ msg: t('settings.saveFailed'), kind: 'error' });
+    }
   };
 
   const pickFfmpeg = async () => {
-    const picked = await bridge.openFiles('any');
-    if (picked?.length) {
-      setFfmpegPath(picked[0]);
-      update({ ffmpegPath: picked[0] });
+    try {
+      const picked = await bridge.openFiles('any');
+      if (picked?.length) {
+        setFfmpegPath(picked[0]);
+        await update({ ffmpegPath: picked[0] });
+      }
+    } catch (e) {
+      setUpdateStatus({ msg: t('settings.saveFailed'), kind: 'error' });
     }
   };
 

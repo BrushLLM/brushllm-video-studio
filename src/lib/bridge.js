@@ -64,6 +64,8 @@ function makeMock() {
         id, op: spec.op, params: spec.params, inputs: spec.inputs,
         inputNames: spec.inputs.map((p) => p.split(/[/\\]/).pop()),
         outputPath: spec.outputPath || `${base}-${spec.op.split('.').pop()}.mp4`,
+        hasOutput: false,
+        settling: false,
         plan: { containerLabel: 'MP4', videoEncoderLabel: 'H.264', qualityLabel: 'CRF 23', durationSec: 142.5, sizeEstimate: null, sizeNoteKey: 'plan.sizeCRF', width: 1920, height: 1080, fps: 25 },
         actual: null,
         status: 'running', progress: 0, speed: 0,
@@ -127,7 +129,7 @@ function makeMock() {
     deleteFile: async () => ({ ok: true }),
     retryJob: async (id) => {
       const job = jobs.get(id);
-      if (!job) return false;
+      if (!job || job.settling) return false;
       job.status = 'queued';
       job.progress = 0;
       job.speed = 0;
@@ -168,11 +170,11 @@ function makeMock() {
     removeJob: async (id) => { jobs.delete(id); listeners.removed.forEach((cb) => cb(id)); return true; },
     revealPath: async () => true,
     openExternal: async (url) => { window.open(url, '_blank'); return true; },
-    subtitleConvert: async (filePath) => ({
-      outputPath: filePath.replace(/\.[^.]+$/, '.srt'), cueCount: 42, fromFormat: 'vtt', charset: 'utf-8'
+    subtitleConvert: async (filePath, targetFormat, sourceCharset) => ({
+      outputPath: filePath.replace(/\.[^.]+$/, `.${targetFormat}`), cueCount: 42, fromFormat: 'vtt', charset: 'utf-8'
     }),
-    subtitleShift: async (filePaths) => filePaths.map((p) => ({ input: p, outputPath: p, cueCount: 42 })),
-    subtitleReencode: async (filePaths) => filePaths.map((p) => ({ input: p, outputPath: p, fromCharset: 'gbk' })),
+    subtitleShift: async (filePaths, offsetMs, overwrite, sourceCharset) => filePaths.map((p) => ({ input: p, outputPath: p, cueCount: 42 })),
+    subtitleReencode: async (filePaths, charset, overwrite, sourceCharset) => filePaths.map((p) => ({ input: p, outputPath: p, fromCharset: sourceCharset || 'auto' })),
     onJobsUpdated: (cb) => { listeners.updated.push(cb); return () => { listeners.updated = listeners.updated.filter((x) => x !== cb); }; },
     onJobsRemoved: (cb) => { listeners.removed.push(cb); return () => { listeners.removed = listeners.removed.filter((x) => x !== cb); }; }
   };

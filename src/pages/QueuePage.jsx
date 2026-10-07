@@ -104,6 +104,11 @@ function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteReque
     if (!ok) onTerminateNoop();
   };
 
+  const deleteOutput = async () => {
+    const result = await bridge.deleteFile(job.id);
+    if (!result?.ok) onTerminateNoop();
+  };
+
   const active = job.status === 'running' || job.status === 'queued' || job.status === 'paused';
 
   // Progress display: unknown duration or zero progress shows the sliding
@@ -135,19 +140,19 @@ function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteReque
               <Icon name="stop" size={13} />
             </button>
           )}
-          {(job.status === 'canceled' || job.status === 'error') && (
+          {(job.status === 'canceled' || job.status === 'error') && !job.settling && (
             <button className="icon-btn" title={t('common.resume')} aria-label={t('common.resume')} onClick={() => bridge.retryJob(job.id)}>
               <Icon name="rotate" size={14} />
             </button>
           )}
           {job.status === 'done' && (
             <>
-              <button className="icon-btn" title={revealLabel} aria-label={revealLabel} onClick={() => bridge.revealPath(job.outputPath)}>
+              {job.hasOutput && <button className="icon-btn" title={revealLabel} aria-label={revealLabel} onClick={() => bridge.revealPath(job.id)}>
                 <Icon name="folder" size={14} />
-              </button>
-              <button className="icon-btn" title={t('common.rerun')} aria-label={t('common.rerun')} onClick={() => bridge.retryJob(job.id)}>
+              </button>}
+              {!job.settling && <button className="icon-btn" title={t('common.rerun')} aria-label={t('common.rerun')} onClick={() => bridge.retryJob(job.id)}>
                 <Icon name="rotate" size={14} />
-              </button>
+              </button>}
             </>
           )}
           {!active && (
@@ -179,6 +184,9 @@ function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteReque
         </div>
       )}
 
+      {(job.status === 'error' || job.status === 'canceled') && job.settling && (
+        <div className="job-error">{t('queue.finishingCancellation')}</div>
+      )}
       {job.status === 'error' && job.error && (
         <div className="job-error">{job.error}</div>
       )}
@@ -192,14 +200,14 @@ function DeleteConfirmModal({ job, t, onClose, onDeleted }) {
   const { t: _t } = useI18n();
   const [alsoDeleteFile, setAlsoDeleteFile] = useState(false);
   const [busy, setBusy] = useState(false);
-  const hasOutput = Boolean(job.outputPath) && job.status === 'done';
+  const hasOutput = Boolean(job.hasOutput) && job.status === 'done';
 
   const confirm = async () => {
     setBusy(true);
     try {
       if (alsoDeleteFile && hasOutput) {
-        const r = await bridge.deleteFile(job.outputPath);
-        if (r && r.ok === false) {
+        const r = await bridge.deleteFile(job.id);
+        if (!r?.ok) {
           onDeleted(t('msg.fileDeleteFailed'), 'error');
           return;
         }

@@ -31,16 +31,28 @@ contextBridge.exposeInMainWorld('brushvs', {
   pauseJob: (id) => ipcRenderer.invoke('jobs:pause', id),
   resumeJob: (id) => ipcRenderer.invoke('jobs:resume', id),
   canPauseJobs: () => ipcRenderer.invoke('jobs:canPause'),
-  deleteFile: (filePath) => ipcRenderer.invoke('files:delete', filePath),
-  revealPath: (p) => ipcRenderer.invoke('shell:reveal', p),
+  deleteFile: (jobId) => ipcRenderer.invoke('files:delete', jobId),
+  revealPath: (jobId) => ipcRenderer.invoke('shell:reveal', jobId),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 
-  subtitleConvert: (filePath, targetFormat) =>
-    ipcRenderer.invoke('subtitle:convert', { filePath, targetFormat }),
-  subtitleShift: (filePaths, offsetMs, inPlace) =>
-    ipcRenderer.invoke('subtitle:shift', { filePaths, offsetMs, inPlace }),
-  subtitleReencode: (filePaths, charset, inPlace) =>
-    ipcRenderer.invoke('subtitle:reencode', { filePaths, charset, inPlace }),
+  subtitleConvert: (filePath, targetFormat, sourceCharset) => {
+    if (typeof filePath !== 'string' || typeof targetFormat !== 'string') {
+      return Promise.reject(new Error('Invalid subtitle convert parameters'));
+    }
+    return ipcRenderer.invoke('subtitle:convert', { filePath, targetFormat, sourceCharset });
+  },
+  subtitleShift: (filePaths, offsetMs, inPlace, sourceCharset) => {
+    if (!Array.isArray(filePaths) || !Number.isFinite(Number(offsetMs))) {
+      return Promise.reject(new Error('Invalid subtitle shift parameters'));
+    }
+    return ipcRenderer.invoke('subtitle:shift', { filePaths, offsetMs, inPlace, sourceCharset });
+  },
+  subtitleReencode: (filePaths, charset, inPlace, sourceCharset) => {
+    if (!Array.isArray(filePaths) || typeof charset !== 'string') {
+      return Promise.reject(new Error('Invalid subtitle reencode parameters'));
+    }
+    return ipcRenderer.invoke('subtitle:reencode', { filePaths, charset, inPlace, sourceCharset });
+  },
 
   onJobsUpdated: (cb) => {
     const listener = (_e, job) => cb(job);

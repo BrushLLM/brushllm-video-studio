@@ -156,9 +156,9 @@ export function TimeField({ label, value, onChange }) {
       <span className="param-label">{t(label)}</span>
       <input
         className="field" type="text" placeholder="0:00 / 12.5"
-        defaultValue={value == null ? '' : String(value)}
+        value={value == null ? '' : String(value)}
         aria-label={t(label)}
-        onBlur={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
       />
     </div>
   );

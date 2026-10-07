@@ -1,399 +1,370 @@
-// Job queue: sequential ffmpeg execution with progress, cancel, retry.
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
-const { buildJobCommands } = require('./commands');
+const { buildJobCommands, outputExtFor } = require('./commands');
 const { prepareInputs } = require('./prepare');
 const { probe, summarize } = require('./probe');
+const { reservePath, publishFile, publishSequence, deleteArtifact } = require('./artifacts');
+
+const TERMINAL = new Set(['done', 'error', 'canceled']);
+const concurrencyOf = (n) => Number.isInteger(Number(n)) ? Math.max(1, Math.min(4, Number(n))) : 1;
+const canceledError = () => Object.assign(new Error('Job canceled'), { name: 'AbortError' });
+
+function expectedDuration(op, p, probes) {
+  let duration = probes[0]?.durationSec || 0;
+  if (op === 'video.merge') return probes.reduce((total, s) => total + (s?.durationSec || 0), 0);
+  if (op === 'video.replaceAudio' && probes[1]?.durationSec > 0) return duration > 0 ? Math.min(duration, probes[1].durationSec) : 0;
+  if (['video.trim', 'audio.trim', 'video.anim'].includes(op)) {
+    const end = p.endSec == null || p.endSec === '' ? duration : Number(p.endSec);
+    duration = Math.max(0, (duration > 0 ? Math.min(end, duration) : end) - Number(p.startSec || 0));
+  }
+  if (op === 'video.speed') duration /= Number(p.factor || 1);
+  return Number.isFinite(duration) ? duration : 0;
+}
 
 class JobManager extends EventEmitter {
   constructor({ ffmpeg, ffprobe, concurrency = 1 } = {}) {
     super();
     this.ffmpeg = ffmpeg;
     this.ffprobe = ffprobe;
-    this.concurrency = concurrency;
+    this.concurrency = concurrencyOf(concurrency);
     this.jobs = new Map();
     this.running = 0;
     this._seq = 0;
-    this._children = new Map(); // jobId -> child process
+    this._children = new Map();
+    this._reserved = new Set();
+    this._runs = new Set();
+    this._closing = false;
   }
 
-  setBinaries({ ffmpeg, ffprobe }) {
-    this.ffmpeg = ffmpeg;
-    this.ffprobe = ffprobe;
-  }
-
-  setConcurrency(n) {
-    this.concurrency = Math.max(1, Math.min(4, n | 0));
-    this._pump();
-  }
-
-  // How many jobs are queued/running/paused right now — used by main.js to
-  // hold a powerSaveBlocker while work is in flight.
-  activeCount() {
-    let n = 0;
-    for (const j of this.jobs.values()) {
-      if (j.status === 'queued' || j.status === 'running' || j.status === 'paused') n++;
-    }
-    return n;
-  }
-
-  list() {
-    return [...this.jobs.values()].map((j) => this._public(j));
-  }
+  setBinaries({ ffmpeg, ffprobe }) { this.ffmpeg = ffmpeg; this.ffprobe = ffprobe; }
+  setConcurrency(n) { this.concurrency = concurrencyOf(n); this._pump(); }
+  activeCount() { return [...this.jobs.values()].filter((j) => !TERMINAL.has(j.status) || j.attempt).length; }
+  list() { return [...this.jobs.values()].map((j) => this._public(j)); }
 
   _public(j) {
     return {
-      id: j.id,
-      op: j.op,
-      params: j.params,
-      inputs: j.inputs,
-      inputNames: j.inputs.map((p) => path.basename(p)),
-      outputPath: j.outputPath,
-      status: j.status,
-      progress: j.progress,
-      speed: j.speed,
-      error: j.error,
-      commandText: j.commandText,
-      expectedDuration: j.expectedDuration,
-      plan: j.plan,
-      cpuPercent: j.cpuPercent || 0,
-      actual: j.actual,
-      createdAt: j.createdAt,
-      startedAt: j.startedAt,
-      endedAt: j.endedAt
+      id: j.id, op: j.op, params: j.params, inputs: j.inputs,
+      inputNames: j.inputs.map((p) => path.basename(p)), outputPath: j.outputPath,
+      status: j.status, progress: j.progress, speed: j.speed, error: j.error,
+      commandText: j.commandText, expectedDuration: j.expectedDuration,
+      plan: j.plan, cpuPercent: j.cpuPercent || 0, actual: j.actual,
+      createdAt: j.createdAt, startedAt: j.startedAt, endedAt: j.endedAt,
+      settling: Boolean(j.attempt && TERMINAL.has(j.status)),
+      fallback: j.fallback || null, hasOutput: Boolean(j.artifact),
+      artifactPaths: j.artifacts.map((a) => a.outputPath)
     };
   }
 
-  // spec: { op, params, inputs, outputPath, expectedDuration?, plan?, probes? }
+  _emit(job) { this.emit('updated', this._public(job)); }
+
   async add(spec) {
-    const id = `job-${++this._seq}-${Date.now()}`;
+    if (this._closing) throw new Error('The application is shutting down');
+    if (!spec || typeof spec.op !== 'string' || !Array.isArray(spec.inputs) || !spec.inputs.length ||
+        spec.inputs.some((p) => typeof p !== 'string' || !path.isAbsolute(p)) ||
+        typeof spec.outputPath !== 'string' || !path.isAbsolute(spec.outputPath)) throw new Error('Invalid job specification');
+    const requestedSpec = structuredClone(spec);
+    requestedSpec.params = Object.freeze(structuredClone(spec.params || {}));
+    requestedSpec.requestedParams = spec.requestedParams ? Object.freeze(structuredClone(spec.requestedParams)) : undefined;
+    requestedSpec.inputs = Object.freeze([...spec.inputs]);
+    Object.freeze(requestedSpec);
     const job = {
-      id,
-      op: spec.op,
-      params: spec.params || {},
-      inputs: spec.inputs,
-      outputPath: spec.outputPath,
-      expectedDuration: spec.expectedDuration || 0,
-      plan: spec.plan || null,
-      probes: spec.probes || null, // pre-probed by main.js; skips re-probing
-      actual: null,
-      status: 'queued',
-      progress: 0,
-      speed: 0,
-      error: null,
-      commandText: '',
-      createdAt: Date.now(),
-      startedAt: 0,
-      endedAt: 0
+      id: `job-${++this._seq}-${Date.now()}`, requestedSpec,
+      op: spec.op, params: structuredClone(spec.params || {}), inputs: [...spec.inputs],
+      outputPath: spec.outputPath, expectedDuration: 0, plan: spec.plan || null,
+      actual: null, artifact: null, artifacts: [], attempt: null,
+      status: 'queued', progress: 0, speed: 0, cpuPercent: 0, error: null,
+      commandText: '', createdAt: Date.now(), startedAt: 0, endedAt: 0
     };
-    this.jobs.set(id, job);
-    this.emit('updated', this._public(job));
+    this.jobs.set(job.id, job);
+    this._emit(job);
     this._pump();
     return this._public(job);
   }
 
   cancel(id) {
     const job = this.jobs.get(id);
-    if (!job) return false;
-    // SIGKILL terminates a SIGSTOPped process too — paused jobs must be
-    // terminable, otherwise "terminate" silently no-ops and the job later
-    // completes as if nothing happened.
-    if (job.status === 'running' || job.status === 'paused') {
-      const child = this._children.get(id);
-      if (child) child.kill('SIGKILL');
-      job.status = 'canceled';
-      job.endedAt = Date.now();
-      this._cleanupPartial(job);
-    } else if (job.status === 'queued') {
-      job.status = 'canceled';
-      job.endedAt = Date.now();
-    } else {
-      return false;
-    }
-    this.emit('updated', this._public(job));
+    if (!job || TERMINAL.has(job.status)) return false;
+    job.status = 'canceled';
+    job.endedAt = Date.now();
+    job.speed = 0;
+    job.attempt?.controller.abort();
+    this._emit(job);
     return true;
   }
 
   retry(id) {
     const job = this.jobs.get(id);
-    if (!job || !['error', 'canceled', 'done', 'paused'].includes(job.status)) return false;
-    job.status = 'queued';
-    job.progress = 0;
-    job.speed = 0;
-    job.error = null;
-    job.startedAt = 0;
-    job.endedAt = 0;
-    this.emit('updated', this._public(job));
+    if (this._closing || !job || !TERMINAL.has(job.status) || job.attempt) return false;
+    Object.assign(job, { status: 'queued', progress: 0, speed: 0, cpuPercent: 0, error: null,
+      actual: null, plan: null, fallback: null, startedAt: 0, endedAt: 0, commandText: '' });
+    this._emit(job);
     this._pump();
     return true;
   }
 
-  // Real pause/resume via SIGSTOP/SIGCONT (POSIX only — not on Windows).
-  static get canPause() {
-    return process.platform !== 'win32';
-  }
+  static get canPause() { return process.platform !== 'win32'; }
 
   pause(id) {
-    if (!JobManager.canPause) return false;
     const job = this.jobs.get(id);
-    if (!job || job.status !== 'running') return false;
     const child = this._children.get(id);
-    if (!child) return false;
-    try {
-      child.kill('SIGSTOP');
-    } catch {
-      return false;
-    }
+    if (!JobManager.canPause || job?.status !== 'running' || !child || child !== job.attempt?.child) return false;
+    try { if (!child.kill('SIGSTOP')) return false; } catch { return false; }
     job.status = 'paused';
     job.speed = 0;
-    this.emit('updated', this._public(job));
+    this._emit(job);
     return true;
   }
 
   resume(id) {
     const job = this.jobs.get(id);
-    if (!job || job.status !== 'paused') return false;
     const child = this._children.get(id);
-    if (!child) return false;
-    try {
-      child.kill('SIGCONT');
-    } catch {
-      return false;
-    }
+    if (job?.status !== 'paused' || !child || child !== job.attempt?.child) return false;
+    try { if (!child.kill('SIGCONT')) return false; } catch { return false; }
     job.status = 'running';
-    this.emit('updated', this._public(job));
+    this._emit(job);
     return true;
   }
 
   remove(id) {
     const job = this.jobs.get(id);
-    if (!job || job.status === 'running' || job.status === 'paused') return false;
+    if (!job || job.attempt || !TERMINAL.has(job.status)) return false;
     this.jobs.delete(id);
     this.emit('removed', id);
     return true;
   }
 
-  _cleanupPartial(job) {
-    try {
-      if (job.outputPath && fs.existsSync(job.outputPath)) {
-        fs.rmSync(job.outputPath, { force: true });
-      }
-    } catch {
-      /* best effort */
+  deleteOutput(id) {
+    const job = this.jobs.get(id);
+    if (!job || job.attempt || !TERMINAL.has(job.status)) return { ok: false, error: 'Job is still active' };
+    const result = deleteArtifact(job.artifact, job.inputs);
+    if (result.ok) {
+      job.artifacts = job.artifacts.filter((a) => a !== job.artifact);
+      job.artifact = null;
+      this._emit(job);
     }
+    return result;
+  }
+
+  async shutdown() {
+    this._closing = true;
+    for (const job of this.jobs.values()) if (!TERMINAL.has(job.status)) this.cancel(job.id);
+    await Promise.allSettled([...this._runs]);
+  }
+
+  _check(job, attempt) {
+    if (job.attempt !== attempt || attempt.controller.signal.aborted) throw canceledError();
   }
 
   _pump() {
+    if (this._closing) return;
     while (this.running < this.concurrency) {
-      const next = [...this.jobs.values()].find((j) => j.status === 'queued');
-      if (!next) break;
+      const job = [...this.jobs.values()].find((j) => j.status === 'queued' && !j.attempt);
+      if (!job) break;
+      const attempt = { controller: new AbortController(), child: null, ffmpeg: this.ffmpeg, ffprobe: this.ffprobe, reserved: null, tmpDir: null };
+      job.attempt = attempt;
+      job.status = 'running';
+      job.startedAt = Date.now();
       this.running++;
-      next.status = 'running';
-      next.startedAt = Date.now();
-      this.emit('updated', this._public(next));
-      this._run(next)
-        .catch((err) => {
-          next.status = 'error';
-          next.error = err.message || String(err);
-          next.endedAt = Date.now();
-          // A failed job must not leave a broken partial output behind.
-          this._cleanupPartial(next);
-          this.emit('updated', this._public(next));
-        })
-        .finally(() => {
-          this.running--;
-          this._pump();
-        });
+      this._emit(job);
+      const run = this._run(job, attempt).catch((error) => {
+        if (job.attempt !== attempt) return;
+        job.status = attempt.controller.signal.aborted ? 'canceled' : 'error';
+        job.error = job.status === 'error' ? error.message || String(error) : null;
+        job.endedAt = Date.now();
+      }).finally(() => {
+        if (attempt.tmpDir) fs.rmSync(attempt.tmpDir, { recursive: true, force: true });
+        if (attempt.reserved) this._reserved.delete(attempt.reserved);
+        if (job.attempt === attempt) job.attempt = null;
+        this.running--;
+        this._runs.delete(run);
+        this._emit(job);
+        this._pump();
+      });
+      this._runs.add(run);
     }
   }
 
-  async _run(job) {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brushvs-'));
-    try {
-      // Probe inputs for ctx (hasAudio, codecs, merge compatibility).
-      // main.js already probed them at submission time — reuse when present.
-      const probes = [];
-      if (job.probes && job.probes.length === job.inputs.length) {
-        probes.push(...job.probes);
-      } else {
-        for (const input of job.inputs) {
-          try {
-            probes.push(summarize(await probe(this.ffprobe, input)));
-          } catch {
-            probes.push(null);
-          }
-        }
-      }
-      const primary = probes[0] || {};
-      const ctx = {
-        hasAudio: !!(primary.audio && primary.audio.codec),
-        hasVideo: !!(primary.video && primary.video.codec),
-        probe: primary,
-        allProbes: probes,
-        subFormats: []
-      };
-      if (!job.expectedDuration) {
-        if (job.op === 'video.merge') {
-          job.expectedDuration = probes.reduce((acc, p) => acc + ((p && p.durationSec) || 0), 0);
-        } else {
-          job.expectedDuration = primary.durationSec || 0;
-        }
-        // Trim / anim jobs only process a sub-range.
-        const p = job.params;
-        if (p.startSec != null && p.startSec > 0) {
-          job.expectedDuration = Math.max(
-            0.1,
-            job.expectedDuration - Number(p.startSec)
-          );
-        }
-        if (p.endSec != null && p.endSec > 0) {
-          job.expectedDuration = Math.max(0.1, Math.min(job.expectedDuration, Number(p.endSec) - Number(p.startSec || 0)));
-        }
-        // Speed changes scale the output duration.
-        if (job.op === 'video.speed' && p.factor > 0) {
-          job.expectedDuration = Math.max(0.1, job.expectedDuration / Number(p.factor));
-        }
-      }
-
-      const prepared = prepareInputs(job.op, job.params, job.inputs, tmpDir);
+  async _run(job, attempt) {
+    const { buildPlan, buildActual } = await import('../../shared/plan.mjs');
+    const { resolveEncoding, applyResolved, isGpuEncoder } = await import('../../shared/resolve.mjs');
+    const { assertValidOperation } = await import('../../shared/validation.mjs');
+    this._check(job, attempt);
+    const spec = job.requestedSpec;
+    const probes = [];
+    for (const input of job.inputs) {
+      this._check(job, attempt);
+      const stat = fs.statSync(input);
+      if (!stat.isFile()) throw new Error('Input is not a regular file');
+      // Text subtitles are decoded by prepareInputs, not every ffprobe build can read TTML.
+      if (/\.(srt|vtt|ass|ssa|ttml|xml|dfxp)$/i.test(input)) { probes.push(null); continue; }
+      probes.push(summarize(await probe(attempt.ffprobe, input, { signal: attempt.controller.signal }), input));
+    }
+    this._check(job, attempt);
+    const source = probes[0] || {};
+    const requested = structuredClone(spec.requestedParams || spec.params || {});
+    const ctx = { probe: source, allProbes: probes, hasVideo: Boolean(source.video), hasAudio: Boolean(source.audio), subFormats: [] };
+    const opts = { gpuEncoders: spec.gpuEncoders || [], allProbes: probes };
+    assertValidOperation(job.op, requested, source, opts);
+    let effective = requested;
+    if (spec.requestedParams) {
+      const resolved = resolveEncoding(job.op, requested, source, opts);
+      if (resolved.error) throw new Error(resolved.error);
+      effective = applyResolved(requested, resolved);
+    }
+    job.params = effective;
+    job.expectedDuration = expectedDuration(job.op, effective, probes);
+    job.plan = buildPlan(job.op, effective, source, opts);
+    const frames = job.op === 'video.extractFrames';
+    let desired;
+    if (frames) {
+      desired = spec.framesDirectory || spec.outputPath;
+    } else {
+      const ext = outputExtFor(job.op, effective, job.inputs[0], ctx);
+      desired = path.join(path.dirname(spec.outputPath), `${path.basename(spec.outputPath, path.extname(spec.outputPath))}${ext}`);
+    }
+    fs.mkdirSync(path.dirname(desired), { recursive: true });
+    attempt.reserved = reservePath(desired, this._reserved);
+    attempt.tmpDir = fs.mkdtempSync(path.join(path.dirname(attempt.reserved), '.brushvs-work-'));
+    const stagedBase = path.join(attempt.tmpDir, frames ? 'frame' : `output${path.extname(attempt.reserved)}`);
+    let built;
+    let staged;
+    for (let pass = 0; pass < 2; pass++) {
+      this._check(job, attempt);
+      const prepared = prepareInputs(job.op, effective, job.inputs, attempt.tmpDir);
       ctx.subFormats = prepared.subFormats;
-      const inputs = prepared.inputs;
-
-      const built = buildJobCommands(job.op, job.params, inputs, job.outputPath, ctx);
+      built = buildJobCommands(job.op, effective, prepared.inputs, stagedBase, ctx);
       if (!built) throw new Error('Operation needs no processing');
-      if (built.outputPath && built.outputPath !== job.outputPath) {
-        job.outputPath = built.outputPath;
-      }
+      staged = built.outputPath || stagedBase;
+      if (path.dirname(staged) !== attempt.tmpDir) throw new Error('Command output escaped its staging directory');
+      if (!frames && path.extname(staged) !== path.extname(attempt.reserved)) throw new Error('Command changed the reserved output format');
+      job.outputPath = frames ? path.join(attempt.reserved, path.basename(staged)) : attempt.reserved;
       job.commandText = built.steps.map((s) => `ffmpeg ${s.commandText}`).join('\n');
-      this.emit('updated', this._public(job));
-
-      // Materialize aux files (concat lists etc.).
+      this._emit(job);
       for (const aux of built.auxFiles || []) {
-        fs.writeFileSync(path.join(tmpDir, aux.name), aux.content, 'utf8');
+        if (path.basename(aux.name) !== aux.name) throw new Error('Invalid auxiliary filename');
+        fs.writeFileSync(path.join(attempt.tmpDir, aux.name), aux.content, 'utf8');
       }
-      // Ensure the output directory exists.
-      const outDir = path.dirname(job.outputPath.replace(/%05d[^/]*$/, 'x'));
-      fs.mkdirSync(outDir, { recursive: true });
-
-      for (let i = 0; i < built.steps.length; i++) {
-        if (job.status === 'canceled') return;
-        await this._runStep(job, built.steps[i], tmpDir, i, built.steps.length);
-      }
-      // A cancel that landed in the gap between the last step finishing and
-      // this line must NOT be overwritten by "done".
-      if (job.status === 'canceled') return;
-      job.status = 'done';
-      job.progress = 1;
-      job.endedAt = Date.now();
-      // actual layer: re-probe the finished output (single files only).
-      if (job.outputPath && !job.outputPath.includes('%05d')) {
-        try {
-          const raw = await probe(this.ffprobe, job.outputPath);
-          job.actual = summarize(raw);
-        } catch {
-          /* probing the output is best-effort */
+      try {
+        for (let i = 0; i < built.steps.length; i++) {
+          this._check(job, attempt);
+          await this._runStep(job, attempt, built.steps[i], i, built.steps.length);
         }
+        break;
+      } catch (error) {
+        this._check(job, attempt);
+        const mayFallback = pass === 0 && spec.requestedParams && (requested.hwStrategy || 'auto') === 'auto' &&
+          isGpuEncoder(effective.videoCodec) && /cannot create compression session|failed to (?:create|initializ)|no capable devices|hardware encoder.*(?:busy|not supported)/i.test(error.message + (error.stderr || ''));
+        if (!mayFallback) throw error;
+        const resolved = resolveEncoding(job.op, { ...requested, hwStrategy: 'cpu' }, source, { ...opts, gpuEncoders: [] });
+        if (resolved.error) throw new Error(resolved.error);
+        effective = applyResolved({ ...requested, hwStrategy: 'cpu' }, resolved);
+        job.params = effective;
+        job.fallback = 'cpu';
+        job.plan = buildPlan(job.op, effective, source, { ...opts, gpuEncoders: [] });
+        if (fs.existsSync(staged)) fs.unlinkSync(staged);
+        this._emit(job);
       }
-      this.emit('updated', this._public(job));
-    } finally {
-      fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+    this._check(job, attempt);
+    let actual = null;
+    if (!frames) {
+      if (!fs.existsSync(staged) || fs.statSync(staged).size === 0) throw new Error('Processing produced no output');
+      const raw = await probe(attempt.ffprobe, staged, { signal: attempt.controller.signal });
+      const summary = summarize(raw, staged);
+      this._validateOutput(job, summary, ctx);
+      actual = buildActual(summary, attempt.reserved);
+    } else if (effective.mode === 'single' && (!fs.existsSync(staged) || !fs.statSync(staged).size)) {
+      throw new Error('No frame exists at the selected time');
+    }
+    this._check(job, attempt);
+    const artifact = frames ? publishSequence(staged, attempt.reserved) : publishFile(staged, attempt.reserved);
+    job.artifacts.push(artifact);
+    job.artifact = artifact;
+    job.outputPath = artifact.outputPath;
+    job.actual = actual;
+    job.status = 'done';
+    job.progress = 1;
+    job.endedAt = Date.now();
+  }
+
+  _validateOutput(job, actual, ctx) {
+    if (job.op === 'subtitle.extract') {
+      if (!actual.subtitleStreams?.length) throw new Error('Output contains no subtitle stream');
+      return;
+    }
+    if (job.op.startsWith('audio.') || job.op === 'video.extractAudio') {
+      if (!actual.audio) throw new Error('Output contains no audio stream');
+    } else if (job.op !== 'video.anim' && !actual.video) throw new Error('Output contains no video stream');
+    if (job.op === 'video.merge' && job.expectedDuration > 0) {
+      const tolerance = Math.max(0.5, job.expectedDuration * 0.03);
+      if (Math.abs(actual.durationSec - job.expectedDuration) > tolerance) throw new Error('Merged output duration does not match its inputs');
+      if (actual.video?.durationSec > 0 && Math.abs(actual.video.durationSec - job.expectedDuration) > tolerance) throw new Error('Merged video is incomplete');
+      if (ctx.allProbes.some((p) => p?.audio) && !actual.audio) throw new Error('Merged output lost its audio');
     }
   }
 
-  _runStep(job, step, cwd, stepIndex, stepCount) {
+  _runStep(job, attempt, step, stepIndex, stepCount) {
+    this._check(job, attempt);
     return new Promise((resolve, reject) => {
-      const child = spawn(this.ffmpeg, step.args, { cwd });
+      const child = spawn(attempt.ffmpeg, step.args, { cwd: attempt.tmpDir, windowsHide: true });
+      attempt.child = child;
       this._children.set(job.id, child);
-      let stderrTail = '';
-      let stderrAll = '';
-
-      const stepBase = stepIndex / stepCount;
-      const stepSpan = 1 / stepCount;
-      const report = (sec, speed) => {
-        let frac = 0;
-        if (job.expectedDuration > 0 && sec != null && isFinite(sec)) {
-          frac = Math.max(0, Math.min(1, sec / job.expectedDuration));
-        }
-        // Monotonic: progress never goes backwards, and never reads as 100%
-        // while the job is still running.
-        const next = Math.min(0.999, stepBase + stepSpan * frac);
-        job.progress = Math.max(job.progress || 0, next);
-        if (speed != null) job.speed = speed;
-        this.emit('updated', this._public(job));
-      };
-
-      // Live CPU utilization of the ffmpeg child (POSIX only) — makes
-      // hardware usage visible in the queue instead of guessable.
-      let cpuSampler = null;
-      if (process.platform !== 'win32') {
-        cpuSampler = setInterval(() => {
-          try {
-            const out = require('node:child_process')
-              .spawnSync('ps', ['-o', 'pcpu=', '-p', String(child.pid)], { encoding: 'utf8' });
-            const pct = parseFloat(out.stdout);
-            if (isFinite(pct)) {
-              job.cpuPercent = Math.round(pct);
-              this.emit('updated', this._public(job));
-            }
-          } catch {
-            /* sampling is best-effort */
-          }
-        }, 600);
-      }
-
+      const signal = attempt.controller.signal;
+      const abort = () => child.kill('SIGKILL');
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+      let stderr = '';
+      let startError = null;
+      let criticalError = false;
       let stdoutBuf = '';
-      child.stdout.on('data', (chunk) => {
-        stdoutBuf += chunk;
+      const report = (sec, speed) => {
+        if (job.attempt !== attempt || job.status !== 'running' || signal.aborted) return;
+        const fraction = job.expectedDuration > 0 ? Math.max(0, Math.min(1, sec / job.expectedDuration)) : 0;
+        job.progress = Math.max(job.progress, Math.min(0.999, (stepIndex + fraction) / stepCount));
+        if (Number.isFinite(speed)) job.speed = speed;
+        this._emit(job);
+      };
+      const cpuSampler = process.platform !== 'win32' ? setInterval(() => {
+        if (job.status !== 'running' || !child.pid) return;
+        try {
+          const result = spawnSync('ps', ['-o', 'pcpu=', '-p', String(child.pid)], { encoding: 'utf8', timeout: 1000 });
+          const pct = parseFloat(result.stdout);
+          if (Number.isFinite(pct)) { job.cpuPercent = Math.round(pct); this._emit(job); }
+        } catch { /* CPU sampling is optional. */ }
+      }, 600) : null;
+      child.stdout.on('data', (data) => {
+        stdoutBuf += data;
         const lines = stdoutBuf.split('\n');
-        stdoutBuf = lines.pop();
-        let sec = null;
-        let speed = null;
+        stdoutBuf = lines.pop().slice(-8192);
+        let sec = 0;
+        let speed;
+        let hasTime = false;
         for (const line of lines) {
-          const mUs = line.match(/^out_time_us=(\d+)/);
-          // NB: ffmpeg's out_time_ms is actually microseconds (upstream quirk).
-          const mMs = line.match(/^out_time_ms=(\d+)/);
-          const mSp = line.match(/^speed=\s*([\d.]+)x/);
-          if (mUs) sec = parseInt(mUs[1], 10) / 1e6;
-          else if (mMs) sec = parseInt(mMs[1], 10) / 1e6;
-          if (mSp) speed = parseFloat(mSp[1]);
+          const time = line.match(/^out_time_(?:us|ms)=(-?\d+)/);
+          const sp = line.match(/^speed=\s*([\d.]+)x/);
+          if (time) { sec = Number(time[1]) / 1e6; hasTime = true; }
+          if (sp) speed = Number(sp[1]);
         }
-        if (sec != null || speed != null) report(sec, speed);
+        if (hasTime) report(sec, speed);
       });
-
-      child.stderr.on('data', (chunk) => {
-        const s = chunk.toString();
-        stderrAll += s;
-        stderrTail = (stderrTail + s).slice(-4000);
-        // Fallback progress from the stats line when -progress is unavailable.
-        const mTime = s.match(/time=(\d+):(\d{2}):([\d.]+)/);
-        const mSp = s.match(/speed=\s*([\d.]+)x/);
-        if (mTime) {
-          const sec = +mTime[1] * 3600 + +mTime[2] * 60 + parseFloat(mTime[3]);
-          report(sec, mSp ? parseFloat(mSp[1]) : null);
-        }
+      child.stderr.on('data', (data) => {
+        stderr = (stderr + data.toString()).slice(-65536);
+        if (/Impossible to open|Error demuxing|Error splitting the input into NAL units|Error while decoding stream/.test(stderr)) criticalError = true;
       });
-
-      child.on('error', (e) => {
-        this._children.delete(job.id);
-        reject(new Error(`Failed to start ffmpeg: ${e.message}`));
-      });
-
+      child.on('error', (error) => { startError = new Error(`Failed to start ffmpeg: ${error.message}`); });
       child.on('close', (code) => {
-        this._children.delete(job.id);
+        signal.removeEventListener('abort', abort);
         if (cpuSampler) clearInterval(cpuSampler);
-        if (job.status === 'canceled') {
-          resolve();
-          return;
-        }
-        if (code === 0) {
-          resolve();
-        } else {
-          const hint = extractUsefulError(stderrAll);
-          reject(new Error(hint || `ffmpeg exited with code ${code}`));
-        }
+        if (this._children.get(job.id) === child) this._children.delete(job.id);
+        if (attempt.child === child) attempt.child = null;
+        if (signal.aborted) return reject(canceledError());
+        if (startError) return reject(startError);
+        if (code === 0 && !criticalError) return resolve();
+        const error = new Error(extractUsefulError(stderr) || `ffmpeg exited with code ${code}`);
+        error.stderr = stderr;
+        reject(error);
       });
     });
   }
@@ -402,13 +373,8 @@ class JobManager extends EventEmitter {
 function extractUsefulError(stderr) {
   if (!stderr) return '';
   const lines = stderr.split('\n').map((l) => l.trim()).filter(Boolean);
-  // Prefer lines that describe the actual failure.
-  const meaningful = lines.filter(
-    (l) =>
-      /Error|error|Invalid|invalid|Unable|unable|No such|not found|Unknown|unknown|matches no streams|failed|Failed/.test(l)
-  );
-  const pick = meaningful.length ? meaningful[meaningful.length - 1] : lines[lines.length - 1];
-  return pick.slice(0, 300);
+  const meaningful = lines.filter((l) => /Error|error|Invalid|invalid|Unable|unable|No such|not found|Unknown|unknown|matches no streams|failed|Failed/.test(l));
+  return (meaningful.at(-1) || lines.at(-1) || '').slice(0, 300);
 }
 
-module.exports = { JobManager, extractUsefulError };
+module.exports = { JobManager, extractUsefulError, expectedDuration };

@@ -322,7 +322,7 @@ test('subtitle reencode GBK -> UTF-8', () => {
     Buffer.from('1\n00:00:01,000 --> 00:00:02,000\n', 'latin1'),
     Buffer.from([0xc4, 0xe3, 0xba, 0xc3])
   ]);
-  const r = subs.reencodeBuffer(gbk, 'utf-8');
+  const r = subs.reencodeBuffer(gbk, 'utf-8', { sourceCharset: 'gbk' });
   assert.equal(r.fromCharset, 'gbk');
   assert.match(r.buffer.toString('utf8'), /你好/);
 });

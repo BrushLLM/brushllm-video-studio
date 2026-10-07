@@ -52,11 +52,26 @@ test('video.trim precise re-encodes video', () => {
   assert.equal(args[args.indexOf('-c:v') + 1], 'libx264');
 });
 
+const fullProbe = {
+  durationSec: 6,
+  streams: [
+    { type: 'video', codec: 'h264', timeBase: '1/15360', width: 640, height: 360, pixFmt: 'yuv420p', sampleAspectRatio: '1:1', frameRate: '15/1', attachedPic: false, extradataSize: 39, extradataHash: 'abc' },
+    { type: 'audio', codec: 'aac', timeBase: '1/48000', sampleRate: 48000, channels: 2, channelLayout: 'stereo', sampleFormat: 'fltp', attachedPic: false, extradataSize: 5, extradataHash: 'def' }
+  ],
+  video: { codec: 'h264', width: 640, height: 360 },
+  audio: { codec: 'aac', sampleRate: 48000, channels: 2 }
+};
+
 test('video.merge copy mode writes concat list', () => {
-  const built = buildJobCommands('video.merge', { mode: 'copy', container: 'mp4' }, ['/a.mp4', '/b.mkv'], '/media/out.mp4', baseCtx);
+  const ctx = { ...baseCtx, allProbes: [fullProbe, fullProbe] };
+  const built = buildJobCommands('video.merge', { mode: 'copy', container: 'mp4' }, ['/a.mp4', '/b.mkv'], '/media/out.mp4', ctx);
   assert.ok(built.auxFiles[0].name === 'concat.txt');
   assert.match(built.auxFiles[0].content, /file '\/a\.mp4'/);
   assert.match(built.steps[0].args.join(' '), /-f concat -safe 0 (-threads 0 )?-i concat\.txt/);
+});
+
+test('video.merge copy mode rejects incomplete probe metadata', () => {
+  assert.throws(() => buildJobCommands('video.merge', { mode: 'copy', container: 'mp4' }, ['/a.mp4', '/b.mkv'], '/media/out.mp4', baseCtx), /complete probes/);
 });
 
 test('video.merge auto picks reencode for mixed codecs', () => {
@@ -206,8 +221,10 @@ test('secToTime formats hours/minutes/seconds', () => {
 });
 
 test('concatListContent escapes single quotes', () => {
-  assert.match(concatListContent(["/it's.mp4"]), /file '\/it\\'s\.mp4'/);
-  assert.match(concatListContent(['/a\\b.mp4']), /file '\/a\\\\b\.mp4'/);
+  // ffmpeg concat demuxer: quote closes, escapes, reopens ('''); backslash
+  // inside the quoted span is literal (verified against real ffmpeg 6).
+  assert.equal(concatListContent(["/it's.mp4"]), "file '/it'\\''s.mp4'\n");
+  assert.equal(concatListContent(['/a\\b.mp4']), "file '/a\\b.mp4'\n");
 });
 
 test('outputExtFor picks container extension', () => {
