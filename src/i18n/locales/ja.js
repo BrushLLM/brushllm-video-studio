@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "削除",
   'msg.fileDeleted': "出力ファイルを削除しました",
   'msg.fileDeleteFailed': "出力ファイルを削除できませんでした",
+  'param.sourceCharset': "ソースエンコード",
+  'param.autoDetect': "自動検出",
+  'common.processing': "処理中…",
+  'queue.finishingCancellation': "キャンセル処理中…",
+  'settings.saveFailed': "設定を保存できませんでした",
   'msg.instant': '即時 — キュー不要'
 };

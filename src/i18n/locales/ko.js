@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "삭제",
   'msg.fileDeleted': "출력 파일이 삭제되었습니다",
   'msg.fileDeleteFailed': "출력 파일을 삭제할 수 없습니다",
+  'param.sourceCharset': "소스 인코딩",
+  'param.autoDetect': "자동 감지",
+  'common.processing': "처리 중…",
+  'queue.finishingCancellation': "취소 중…",
+  'settings.saveFailed': "설정을 저장할 수 없습니다",
   'msg.instant': '즉시 처리 — 대기열 불필요'
 };

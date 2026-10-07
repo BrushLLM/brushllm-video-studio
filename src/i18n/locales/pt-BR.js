@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "Excluir",
   'msg.fileDeleted': "Arquivo de saída excluído",
   'msg.fileDeleteFailed': "Não foi possível excluir o arquivo de saída",
+  'param.sourceCharset': "Codificação de origem",
+  'param.autoDetect': "Detecção automática",
+  'common.processing': "Processando…",
+  'queue.finishingCancellation': "Concluindo cancelamento…",
+  'settings.saveFailed': "Não foi possível salvar as configurações",
   'msg.instant': 'Instantâneo — não precisa de fila'
 };

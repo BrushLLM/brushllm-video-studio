@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "Delete",
   'msg.fileDeleted': "Output file deleted",
   'msg.fileDeleteFailed': "Could not delete the output file",
+  'param.sourceCharset': "Source encoding",
+  'param.autoDetect': "Auto detect",
+  'common.processing': "Processing…",
+  'queue.finishingCancellation': "Finishing cancellation…",
+  'settings.saveFailed': "Could not save settings",
   'msg.instant': 'Instant — no queue needed'
 };

@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "Supprimer",
   'msg.fileDeleted': "Fichier de sortie supprimé",
   'msg.fileDeleteFailed': "Impossible de supprimer le fichier de sortie",
+  'param.sourceCharset': "Encodage source",
+  'param.autoDetect': "Détection auto",
+  'common.processing': "Traitement…",
+  'queue.finishingCancellation': "Annulation en cours…",
+  'settings.saveFailed': "Impossible d'enregistrer les paramètres",
   'msg.instant': 'Instantané — aucune file requise'
 };

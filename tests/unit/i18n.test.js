@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const LOCALES = ['de', 'en', 'es', 'fr', 'pt-BR', 'ja', 'zh-CN', 'zh-TW', 'ko'];
+const LOCALES = ['de', 'en', 'es', 'fr', 'it', 'nl', 'pl', 'pt-BR', 'tr', 'id', 'vi', 'ja', 'zh-CN', 'zh-TW', 'ko'];
 const ROOT = path.join(__dirname, '..', '..');
 
 function loadLocale(name) {

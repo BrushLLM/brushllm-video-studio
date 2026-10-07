@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "Löschen",
   'msg.fileDeleted': "Ausgabedatei gelöscht",
   'msg.fileDeleteFailed': "Ausgabedatei konnte nicht gelöscht werden",
+  'param.sourceCharset': "Quellkodierung",
+  'param.autoDetect': "Automatisch erkennen",
+  'common.processing': "Verarbeite…",
+  'queue.finishingCancellation': "Wird beendet…",
+  'settings.saveFailed': "Einstellungen konnten nicht gespeichert werden",
   'msg.instant': 'Sofort — keine Warteschlange nötig'
 };

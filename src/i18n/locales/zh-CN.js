@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "确认删除",
   'msg.fileDeleted': "输出文件已删除",
   'msg.fileDeleteFailed': "输出文件删除失败",
+  'param.sourceCharset': "源编码",
+  'param.autoDetect': "自动检测",
+  'common.processing': "处理中…",
+  'queue.finishingCancellation': "正在取消…",
+  'settings.saveFailed': "保存设置失败",
   'msg.instant': '即时完成,无需排队'
 };

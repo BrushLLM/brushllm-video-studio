@@ -14,7 +14,7 @@
   <img src=".github/assets/screenshot.png" width="800" alt="BrushLLM Video Studio">
 </p>
 
-[English](#english) | [Deutsch](#deutsch) | [Español](#español) | [Français](#français) | [Português (BR)](#português-br) | [简体中文](#简体中文) | [繁體中文](#繁體中文) | [日本語](#日本語) | [한국어](#한국어)
+[English](#english) | [Deutsch](#deutsch) | [Español](#español) | [Français](#français) | [Italiano](#italiano) | [Nederlands](#nederlands) | [Polski](#polski) | [Português (BR)](#português-br) | [Türkçe](#türkçe) | [Bahasa Indonesia](#bahasa-indonesia) | [Tiếng Việt](#tiếng-việt) | [简体中文](#简体中文) | [繁體中文](#繁體中文) | [日本語](#日本語) | [한국어](#한국어)
 
 ---
 
@@ -52,7 +52,7 @@
 | Subtitle Encoding | Fix legacy GBK / Big5 → UTF-8 |
 | Subtitle Extract | Pull subtitle tracks out of a video |
 
-**Highlights:** 9-language UI · hardware acceleration with honest GPU detection · batch processing · live CPU utilization display · prevent-sleep during processing · zero telemetry.
+**Highlights:** 15-language UI · hardware acceleration with honest GPU detection · batch processing · live CPU utilization display · prevent-sleep during processing · zero telemetry.
 
 ### 📥 Download
 
@@ -102,7 +102,7 @@ Ein lokal-first Desktop-Werkzeugkasten für Video — alle Werkzeuge laufen kost
 
 **Werkzeuge:** Format konvertieren · Komprimieren · Zusammenfügen · Schneiden · Rogneren · Skalieren · Drehen · Geschwindigkeit · Stummschalten · Audio ersetzen · Audio extrahieren · Einzelbilder · GIF/WebP · Untertitel einbetten · Untertitel einbrennen · Container wechseln · Metadaten · Audio konvertieren · Lautstärke · Lautheit · Untertitel konvertieren · Untertitel verschieben · Untertitel-Kodierung.
 
-**Highlights:** UI in 9 Sprachen · Hardware-Beschleunigung mit ehrlicher GPU-Erkennung · Stapelverarbeitung · CPU-Auslastung live · Ruhezustand verhindern · keine Telemetrie.
+**Highlights:** UI in 15 Sprachen · Hardware-Beschleunigung mit ehrlicher GPU-Erkennung · Stapelverarbeitung · CPU-Auslastung live · Ruhezustand verhindern · keine Telemetrie.
 
 **📥 Herunterladen:** aktuelle Installationspakete auf [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Unsignierte Apps lösen beim ersten Start eine Warnung aus.
 
@@ -118,7 +118,7 @@ Una caja de herramientas de vídeo local-first — todas las herramientas se eje
 
 **Herramientas:** Convertir formato · Comprimir · Unir · Recortar · Recortar encuadre · Redimensionar · Rotar · Velocidad · Silenciar · Reemplazar audio · Extraer audio · Fotogramas · GIF/WebP · Incrustar subtítulos · Grabar subtítulos · Cambiar contenedor · Metadatos · Convertir audio · Volumen · Sonoridad · Convertir subtítulos · Desplazar subtítulos · Codificación de subtítulos.
 
-**Lo destacado:** interfaz en 9 idiomas · aceleración por hardware con detección honesta de GPU · proceso por lotes · uso de CPU en vivo · evitar suspensión · sin telemetría.
+**Lo destacado:** interfaz en 15 idiomas · aceleración por hardware con detección honesta de GPU · proceso por lotes · uso de CPU en vivo · evitar suspensión · sin telemetría.
 
 **📥 Descargar:** instaladores en [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Apps sin firmar: aviso al primer inicio.
 
@@ -134,7 +134,7 @@ Une boîte à outils vidéo local-first — tous les outils tournent gratuitemen
 
 **Outils :** Convertir le format · Compresser · Fusionner · Découper · Rogner · Redimensionner · Pivoter · Vitesse · Muer · Remplacer l'audio · Extraire l'audio · Images · GIF/WebP · Incorporer des sous-titres · Graver des sous-titres · Changer de conteneur · Métadonnées · Convertir l'audio · Volume · Sonie · Convertir les sous-titres · Décaler les sous-titres · Encodage des sous-titres.
 
-**Points forts :** interface en 9 langues · accélération matérielle avec détection honnête du GPU · traitement par lots · utilisation CPU en direct · éveiller pendant le traitement · zéro télémétrie.
+**Points forts :** interface en 15 langues · accélération matérielle avec détection honnête du GPU · traitement par lots · utilisation CPU en direct · éveiller pendant le traitement · zéro télémétrie.
 
 **📥 Télécharger :** installateurs sur [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Apps non signées : avertissement au premier lancement.
 
@@ -144,13 +144,62 @@ Développement et architecture dans la section [English](#english).
 
 ---
 
+## Italiano
+
+Una cassetta degli attrezzi video local-first — tutti gli strumenti girano gratuitamente sul tuo dispositivo, offline e in privato.
+
+**Strumenti:** Converti formato · Comprimi · Unisci · Taglia · Ritaglia · Ridimensiona · Ruota · Velocità · Silenzia · Sostituisci audio · Estrai audio · Fotogrammi · GIF/WebP · Incorpora sottotitoli · Stampa sottotitoli · Cambia contenitore · Metadati · Converti audio · Volume · Loudness · Converti sottotitoli · Sposta temporizzazione · Correggi codifica.
+
+**Punti salienti:** interfaccia in 15 lingue · accelerazione hardware con rilevamento onesto della GPU · elaborazione batch · utilizzo CPU in tempo reale · impedisce la sospensione · zero telemetria.
+
+**📥 Scarica:** installer su [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. App non firmate: avviso al primo avvio.
+
+**🌐 Sito web:** <https://brushllm.com>
+
+Sviluppo e architettura nella sezione [English](#english).
+
+---
+
+## Nederlands
+
+Een lokale-first video gereedschapskist — alle tools draaien gratis op je apparaat, offline en privé.
+
+**Tools:** Formaat converteren · Comprimeren · Samenvoegen · Knippen · Bijsnijden · Schalen · Roteren · Snelheid · Dempen · Audio vervangen · Audio extraheren · Frames · GIF/WebP · Ondertitels insluiten · Ondertitels inbranden · Container wisselen · Metadata · Audio converteren · Volume · Loudness · Ondertitels converteren · Timing verschuiven · Codering corrigeren.
+
+**Hoogtepunten:** interface in 15 talen · hardwareversnelling met eerlijke GPU-detectie · batchverwerking · CPU-gebruik live · slaapstand voorkomen · nul telemetrie.
+
+**📥 Download:** installatiebestanden op [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Niet-ondertekende apps: waarschuwing bij eerste start.
+
+**🌐 Website:** <https://brushllm.com>
+
+Ontwikkeling en architectuur in de sectie [English](#english).
+
+---
+
+## Polski
+
+Lokalny-first zestaw narzędzi wideo — wszystkie narzędzia działają bezpłatnie na Twoim urządzeniu, offline i prywatnie.
+
+**Narzędzia:** Konwertuj format · Kompresuj · Łącz · Przytnij · Przytnij kadr · Skaluj · Obróć · Prędkość · Wycisz · Zastąp audio · Wyodrębnij audio · Klatki · GIF/WebP · Osadź napisy · Wypal napisy · Zmień kontener · Metadane · Konwertuj audio · Głośność · Loudness · Konwertuj napisy · Przesuń timing · Napraw kodowanie.
+
+**Wyróżniki:** interfejs w 15 językach · akceleracja sprzętowa z uczciwą detekcją GPU · przetwarzanie wsadowe · użycie CPU na żywo · zapobiegaj uśpieniu · zero telemetrii.
+
+**📥 Pobierz:** instalatory na [Releases](https://github.com/BrushLLM/brushllllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Niepodpisane aplikacje: ostrzeżenie przy pierwszym uruchomieniu.
+
+**🌐 Strona:** <https://brushllm.com>
+
+Rozwój i architektura w sekcji [English](#english).
+
+---
+
+
 ## Português (BR)
 
 Uma caixa de ferramentas de vídeo local-first — todas as ferramentas rodam grátis na sua máquina, offline e com privacidade.
 
 **Ferramentas:** Converter formato · Comprimir · Unir · Recortar · Cortar quadro · Redimensionar · Girar · Velocidade · Silenciar · Substituir áudio · Extrair áudio · Quadros · GIF/WebP · Incorporar legendas · Gravar legendas · Trocar contêiner · Metadados · Converter áudio · Volume · Intensidade · Converter legendas · Deslocar legendas · Codificação de legendas.
 
-**Destaques:** interface em 9 idiomas · aceleração por hardware com detecção honesta de GPU · processamento em lote · uso de CPU ao vivo · evitar suspensão · zero telemetria.
+**Destaques:** interface em 15 idiomas · aceleração por hardware com detecção honesta de GPU · processamento em lote · uso de CPU ao vivo · evitar suspensão · zero telemetria.
 
 **📥 Baixar:** instaladores em [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Apps não assinados: aviso no primeiro início.
 
@@ -160,13 +209,62 @@ Desenvolvimento e arquitetura na seção [English](#english).
 
 ---
 
+---
+
+## Türkçe
+
+Yerel öncelikli bir video araç kutusu — tüm araçlar cihazınızda ücretsiz çalışır, çevrimdışı ve gizli.
+
+**Araçlar:** Format dönüştür · Sıkıştır · Birleştir · Kırp · Çerçeve kırp · Ölçekle · Döndür · Hız · Sessize al · Ses değiştir · Ses çıkar · Kareler · GIF/WebP · Altyazı göm · Altyazı yaz · Konteyner değiştir · Meta veri · Ses dönüştür · Ses seviyesi · Loudness · Altyazı dönüştür · Zamanlama kaydır · Kodlama düzelt.
+
+**Öne çıkanlar:** 15 dilli arayüz · dürüst GPU algılaması ile donanım hızlandırma · toplu işleme · canlı CPU kullanımı · uyku modunu engelle · sıfır telemetri.
+
+**📥 İndir:** kurulum dosyaları [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. İmzasız uygulamalar: ilk açılışta uyarı.
+
+**🌐 Web sitesi:** <https://brushllm.com>
+
+Geliştirme ve mimari [English](#english) bölümünde.
+
+---
+
+## Bahasa Indonesia
+
+Kotak alat video lokal-first — semua alat berjalan gratis di perangkat Anda, offline dan privat.
+
+**Alat:** Konversi format · Kompres · Gabung · Potong · Potong bingkai · Skala · Putar · Kecepatan · Bisukan · Ganti audio · Ekstrak audio · Frame · GIF/WebP · Sematkan subtitle · Bakar subtitle · Ganti kontainer · Metadata · Konversi audio · Volume · Loudness · Konversi subtitle · Geser waktu · Perbaiki encoding.
+
+**Sorotan:** antarmuka 15 bahasa · akselerasi perangkat keras dengan deteksi GPU yang jujur · pemrosesan batch · penggunaan CPU langsung · cegah tidur · nol telemetri.
+
+**📥 Unduh:** installer di [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Aplikasi tidak ditandatangani: peringatan saat pertama kali dibuka.
+
+**🌐 Situs web:** <https://brushllm.com>
+
+Pengembangan dan arsitektur di bagian [English](#english).
+
+---
+
+## Tiếng Việt
+
+Bộ công cụ video ưu tiên cục bộ — tất cả công cụ chạy miễn phí trên thiết bị của bạn, ngoại tuyến và riêng tư.
+
+**Công cụ:** Chuyển đổi định dạng · Nén · Ghép · Cắt · Cắt khung · Thu phóng · Xoay · Tốc độ · Tắt tiếng · Thay âm thanh · Trích âm thanh · Khung hình · GIF/WebP · Nhúng phụ đề · In phụ đề · Đổi container · Metadata · Chuyển đổi âm thanh · Âm lượng · Loudness · Chuyển đổi phụ đề · Dịch thời gian · Sửa mã hóa.
+
+**Điểm nổi bật:** giao diện 15 ngôn ngữ · tăng tốc phần cứng với phát hiện GPU trung thực · xử lý hàng loạt · sử dụng CPU trực tiếp · chặn chế độ ngủ · không telemetries.
+
+**📥 Tải xuống:** trình cài đặt tại [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. Ứng dụng chưa ký: cảnh báo khi khởi chạy lần đầu.
+
+**🌐 Trang web:** <https://brushllm.com>
+
+Phát triển và kiến trúc trong phần [English](#english).
+
+
 ## 简体中文
 
 本地优先的桌面视频工具箱——所有工具 100% 在本机免费运行，离线且私密。
 
 **工具：** 格式转换 · 压缩 · 合并 · 裁切 · 裁剪画面 · 缩放 · 旋转 · 调速 · 静音 · 替换音轨 · 提取音频 · 提取帧 · GIF/WebP 动图 · 字幕内嵌 · 字幕烧录 · 封装转换 · 元数据 · 音频转换 · 音量 · 响度标准化 · 字幕格式转换 · 时间轴平移 · 编码转换。
 
-**亮点：** 九语言界面 · 硬件加速（诚实 GPU 检测）· 批量处理 · CPU 占用实时显示 · 处理时防睡眠 · 零遥测。
+**亮点：** 十五语言界面 · 硬件加速（诚实 GPU 检测）· 批量处理 · CPU 占用实时显示 · 处理时防睡眠 · 零遥测。
 
 **📥 下载：** 最新安装包见 [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases)——macOS `.dmg`、Windows `.exe`。应用未签名，首次运行会有系统提示。
 
@@ -182,7 +280,7 @@ Desenvolvimento e arquitetura na seção [English](#english).
 
 **工具：** 格式轉換 · 壓縮 · 合併 · 裁切 · 裁剪畫面 · 縮放 · 旋轉 · 變速 · 靜音 · 替換音軌 · 擷取音訊 · 擷取影格 · GIF/WebP 動圖 · 字幕內嵌 · 字幕燒錄 · 封裝轉換 · 詮釋資料 · 音訊轉換 · 音量 · 響度標準化 · 字幕格式轉換 · 時間軸平移 · 編碼轉換。
 
-**亮點：** 九語言介面 · 硬體加速（誠實 GPU 偵測）· 批次處理 · CPU 佔用即時顯示 · 處理時防睡眠 · 零遙測。
+**亮點：** 十五語言介面 · 硬體加速（誠實 GPU 偵測）· 批次處理 · CPU 佔用即時顯示 · 處理時防睡眠 · 零遙測。
 
 **📥 下載：** 最新安裝包見 [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases)——macOS `.dmg`、Windows `.exe`。應用程式未簽署，首次執行會有系統提示。
 
@@ -198,7 +296,7 @@ Desenvolvimento e arquitetura na seção [English](#english).
 
 **ツール：** フォーマット変換 · 圧縮 · 結合 · トリミング · クロップ · リサイズ · 回転 · 速度変更 · ミュート · 音声置換 · 音声抽出 · フレーム抽出 · GIF/WebP · 字幕埋め込み · 字幕焼き付け · コンテナ変更 · メタデータ · 音声変換 · 音量 · ラウドネス · 字幕変換 · タイミングシフト · エンコード修正。
 
-**ハイライト：** 9 言語 UI · ハードウェアアクセラレーション（誠実な GPU 検出）· 一括処理 · CPU 使用率のライブ表示 · 処理中のスリープ防止 · テレメトリなし。
+**ハイライト：** 15 言語 UI · ハードウェアアクセラレーション（誠実な GPU 検出）· 一括処理 · CPU 使用率のライブ表示 · 処理中のスリープ防止 · テレメトリなし。
 
 **📥 ダウンロード：** 最新のインストーラーは [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`、Windows `.exe`。未署名のため初回起動時に警告が出ます。
 
@@ -214,7 +312,7 @@ Desenvolvimento e arquitetura na seção [English](#english).
 
 **도구:** 포맷 변환 · 압축 · 병합 · 자르기 · 크롭 · 크기 조정 · 회전 · 속도 · 음소거 · 오디오 교체 · 오디오 추출 · 프레임 추출 · GIF/WebP · 자막 삽입 · 자막 굽기 · 컨테이너 변경 · 메타데이터 · 오디오 변환 · 볼륨 · 라우드니스 · 자막 변환 · 타이밍 조정 · 인코딩 수정.
 
-**하이라이트:** 9개 언어 UI · 하드웨어 가속 (정직한 GPU 감지) · 일괄 처리 · CPU 사용량 실시간 표시 · 처리 중 절전 방지 · 텔레메트리 없음.
+**하이라이트:** 15개 언어 UI · 하드웨어 가속 (정직한 GPU 감지) · 일괄 처리 · CPU 사용량 실시간 표시 · 처리 중 절전 방지 · 텔레메트리 없음.
 
 **📥 다운로드:** 최신 설치 파일은 [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg`, Windows `.exe`. 미서명 앱이라 첫 실행 시 경고가 표시됩니다.
 

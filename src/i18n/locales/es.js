@@ -299,5 +299,10 @@ export default {
   'modal.confirmDelete': "Eliminar",
   'msg.fileDeleted': "Archivo de salida eliminado",
   'msg.fileDeleteFailed': "No se pudo eliminar el archivo de salida",
+  'param.sourceCharset': "Codificación de origen",
+  'param.autoDetect': "Detección automática",
+  'common.processing': "Procesando…",
+  'queue.finishingCancellation': "Finalizando cancelación…",
+  'settings.saveFailed': "No se pudo guardar la configuración",
   'msg.instant': 'Instantáneo — no necesita cola'
 };
