@@ -304,5 +304,6 @@ export default {
   'common.processing': "處理中…",
   'queue.finishingCancellation': "正在取消…",
   'settings.saveFailed': "儲存設定失敗",
-  'msg.instant': '即時完成,無需排隊'
+  'msg.instant': '即時完成,無需排隊',
+  'msg.probeFailed': '無法讀取此檔案的媒體資訊'
 };

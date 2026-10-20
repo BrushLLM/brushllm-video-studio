@@ -304,5 +304,6 @@ export default {
   'common.processing': "処理中…",
   'queue.finishingCancellation': "キャンセル処理中…",
   'settings.saveFailed': "設定を保存できませんでした",
-  'msg.instant': '即時 — キュー不要'
+  'msg.instant': '即時 — キュー不要',
+  'msg.probeFailed': 'このファイルのメタデータを読み取れませんでした'
 };

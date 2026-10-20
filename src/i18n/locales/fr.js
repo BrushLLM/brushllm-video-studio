@@ -304,5 +304,6 @@ export default {
   'common.processing': "Traitement…",
   'queue.finishingCancellation': "Annulation en cours…",
   'settings.saveFailed': "Impossible d'enregistrer les paramètres",
-  'msg.instant': 'Instantané — aucune file requise'
+  'msg.instant': 'Instantané — aucune file requise',
+  'msg.probeFailed': 'Impossible de lire les métadonnées de ce fichier'
 };

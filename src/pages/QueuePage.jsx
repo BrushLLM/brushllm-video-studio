@@ -4,6 +4,8 @@ import { bridge } from '../lib/bridge';
 import { formatDuration } from '../lib/format';
 import { Icon } from '../components/icons';
 import { ActualSummary } from '../components/MediaSummary';
+import EmptyState from '../components/EmptyState';
+import { useModalFocus } from '../lib/useModalFocus';
 
 export default function QueuePage({ jobs, setJobs, platform = 'darwin' }) {
   const { t } = useI18n();
@@ -45,7 +47,7 @@ export default function QueuePage({ jobs, setJobs, platform = 'darwin' }) {
 
   return (
     <div className="page-inner">
-      <div className="page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      <div className="page-header split">
         <div>
           <h1>{t('queue.title')}</h1>
           <p>{pending > 0 ? t('queue.jobsPending', { n: pending }) : t('app.tagline')}</p>
@@ -56,11 +58,11 @@ export default function QueuePage({ jobs, setJobs, platform = 'darwin' }) {
       </div>
 
       {!jobs.length ? (
-        <div className="empty-state">
-          <Icon name="queue" size={40} />
-          <div className="es-title">{t('queue.empty')}</div>
-          <div className="es-sub">{t('queue.emptyHint')}</div>
-        </div>
+        <EmptyState
+          icon="queue"
+          title={t('queue.empty')}
+          sub={t('queue.emptyHint')}
+        />
       ) : (
         <div className="queue-list">
           {jobs.map((job) => (
@@ -86,7 +88,9 @@ export default function QueuePage({ jobs, setJobs, platform = 'darwin' }) {
         />
       )}
 
-      {toast && <div className={`toast show ${toast.kind}`}>{toast.msg}</div>}
+      {toast && (
+        <div className={`toast ${toast.kind}`} role="status" aria-live="polite">{toast.msg}</div>
+      )}
     </div>
   );
 }
@@ -102,11 +106,6 @@ function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteReque
   const terminate = async () => {
     const ok = await bridge.cancelJob(job.id);
     if (!ok) onTerminateNoop();
-  };
-
-  const deleteOutput = async () => {
-    const result = await bridge.deleteFile(job.id);
-    if (!result?.ok) onTerminateNoop();
   };
 
   const active = job.status === 'running' || job.status === 'queued' || job.status === 'paused';
@@ -197,9 +196,9 @@ function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteReque
 }
 
 function DeleteConfirmModal({ job, t, onClose, onDeleted }) {
-  const { t: _t } = useI18n();
   const [alsoDeleteFile, setAlsoDeleteFile] = useState(false);
   const [busy, setBusy] = useState(false);
+  const modalRef = useModalFocus(onClose);
   const hasOutput = Boolean(job.hasOutput) && job.status === 'done';
 
   const confirm = async () => {
@@ -221,7 +220,15 @@ function DeleteConfirmModal({ job, t, onClose, onDeleted }) {
 
   return (
     <div className="modal-overlay" onClick={busy ? undefined : onClose}>
-      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        className="modal modal-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('modal.deleteTitle')}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h3>{t('modal.deleteTitle')}</h3>
           <button className="icon-btn" title={t('common.close')} aria-label={t('common.close')} onClick={onClose}>

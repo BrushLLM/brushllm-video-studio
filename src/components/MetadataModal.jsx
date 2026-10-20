@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n';
+import { useModalFocus } from '../lib/useModalFocus';
 import { formatDuration, formatSize, formatBitrate } from '../lib/format';
 import { Icon } from './icons';
 
 export default function MetadataModal({ file, onClose }) {
   const { t } = useI18n();
   const [showRaw, setShowRaw] = useState(false);
+  const modalRef = useModalFocus(onClose);
   const s = file.probe || {};
   const raw = file.raw || {};
 
@@ -13,13 +15,23 @@ export default function MetadataModal({ file, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${t('meta.title')} — ${file.name}`}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h3>{t('meta.title')} — {file.name}</h3>
-          <button className="icon-btn" onClick={onClose}><Icon name="x" size={14} /></button>
+          <button className="icon-btn" title={t('common.close')} aria-label={t('common.close')} onClick={onClose}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
         <div className="modal-body">
-          <div className="section-label" style={{ margin: '0 0 10px' }}>{t('meta.general')}</div>
+          <div className="section-label meta-first">{t('meta.general')}</div>
           <dl className="meta-grid">
             <dt>{t('meta.formatName')}</dt><dd>{s.formatName || '—'}</dd>
             <dt>{t('common.duration')}</dt><dd>{formatDuration(s.durationSec)}</dd>

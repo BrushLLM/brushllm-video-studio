@@ -304,5 +304,6 @@ export default {
   'common.processing': "Verarbeite…",
   'queue.finishingCancellation': "Wird beendet…",
   'settings.saveFailed': "Einstellungen konnten nicht gespeichert werden",
-  'msg.instant': 'Sofort — keine Warteschlange nötig'
+  'msg.instant': 'Sofort — keine Warteschlange nötig',
+  'msg.probeFailed': 'Metadaten dieser Datei konnten nicht gelesen werden'
 };

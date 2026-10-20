@@ -1,5 +1,5 @@
 // BrushLLM Video Studio — Electron main process.
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, powerSaveBlocker, nativeTheme } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { resolveBinaries } = require('./engine/binaries');
@@ -151,7 +151,8 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     vibrancy: 'sidebar',
-    backgroundColor: '#ffffff',
+    // Follows the system appearance so a dark-mode launch never flashes white.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#131316' : '#fafaf9',
     title: 'BrushLLM Video Studio',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -161,6 +162,13 @@ function createWindow() {
     }
   });
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  // Keep the window background in sync when the system appearance flips.
+  const syncWindowBackground = () => {
+    mainWindow.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#131316' : '#fafaf9');
+  };
+  nativeTheme.on('updated', syncWindowBackground);
+  mainWindow.on('closed', () => nativeTheme.off('updated', syncWindowBackground));
   const startUrl = process.env.ELECTRON_START_URL;
   if (startUrl) {
     mainWindow.loadURL(startUrl);

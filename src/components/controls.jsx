@@ -24,17 +24,6 @@ export function Segmented({ options, value, onChange, ariaLabel }) {
   );
 }
 
-export function Labeled({ labelKey, hint, children, wide }) {
-  const { t } = useI18n();
-  return (
-    <div className={`param-field${wide ? ' wide' : ''}`}>
-      {labelKey && <span className="param-label">{t(labelKey)}</span>}
-      {children}
-      {hint && <span className="param-hint">{typeof hint === 'string' && hint.includes('.') ? t(hint) : hint}</span>}
-    </div>
-  );
-}
-
 export function SliderField({ label, value, min, max, step, onChange, format, hint }) {
   const { t } = useI18n();
   const display = format === 'x' ? `${value.toFixed(2)}×`

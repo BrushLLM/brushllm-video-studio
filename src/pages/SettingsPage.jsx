@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useI18n, LANGUAGES } from '../i18n';
 import { bridge, isElectron } from '../lib/bridge';
 import { Icon } from '../components/icons';
+import { useModalFocus } from '../lib/useModalFocus';
 
 export default function SettingsPage({ settings, setSettings }) {
   const { t } = useI18n();
@@ -10,6 +11,7 @@ export default function SettingsPage({ settings, setSettings }) {
   const [checking, setChecking] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null); // { latestVersion, releaseUrl, releaseNotes }
   const [updateStatus, setUpdateStatus] = useState(null); // { msg, kind } — persistent status
+  const updateModalRef = useModalFocus(() => setUpdateInfo(null));
 
   useEffect(() => { bridge.appInfo().then(setInfo); }, []);
 
@@ -90,7 +92,7 @@ export default function SettingsPage({ settings, setSettings }) {
             <div className="setting-label">{t('settings.outputDir')}</div>
             <div className="setting-hint">{t('settings.outputDirHint')}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="setting-controls">
             {settings.outputDir && <span className="path-value">{settings.outputDir}</span>}
             <button className="btn btn-secondary" onClick={pickOutputDir}>{t('common.choose')}</button>
           </div>
@@ -118,6 +120,7 @@ export default function SettingsPage({ settings, setSettings }) {
             {[1, 2, 3].map((n) => (
               <button
                 key={n}
+                type="button"
                 className={String(settings.concurrency || 1) === String(n) ? 'active' : ''}
                 onClick={() => update({ concurrency: n })}
               >
@@ -135,7 +138,7 @@ export default function SettingsPage({ settings, setSettings }) {
             <div className="setting-label">{t('settings.ffmpeg')}</div>
             <div className="setting-hint">{t('settings.bundledHint')}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="setting-controls">
             <span className="path-value">{ffmpegPath || (info?.ffmpegPath || t('settings.bundled'))}</span>
             <button className="btn btn-secondary" onClick={pickFfmpeg}>{t('common.choose')}</button>
           </div>
@@ -144,7 +147,7 @@ export default function SettingsPage({ settings, setSettings }) {
 
       <div className="card settings-group">
         <h2>{t('settings.about')}</h2>
-        <div className="setting-row" style={{ marginBottom: 8 }}>
+        <div className="setting-row">
           <div>
             <dl className="about-grid">
               <dt>{t('settings.version')}</dt><dd>v{info?.version || '0.0.1'}</dd>
@@ -169,34 +172,43 @@ export default function SettingsPage({ settings, setSettings }) {
             )}
           </div>
         )}
-        <div style={{ marginTop: 12 }}>
+        <div className="settings-block">
           <div className="setting-label">{t('settings.references')}</div>
-          <div style={{ marginTop: 6 }}>
+          <div className="ref-list">
             {['LosslessCut', 'HandBrake', 'Shutter Encoder', 'Subtitle Edit'].map((r) => (
               <span key={r} className="ref-pill">{r}</span>
             ))}
           </div>
         </div>
-        <div style={{ marginTop: 14 }}>
-          <div className="setting-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div className="settings-block">
+          <div className="setting-label settings-block-title">
             <Icon name="bolt" size={13} /> {t('settings.aiFuture')}
           </div>
-          <div className="setting-hint" style={{ marginTop: 4 }}>{t('settings.aiFutureText')}</div>
+          <div className="setting-hint">{t('settings.aiFutureText')}</div>
         </div>
-        <div className="setting-hint" style={{ marginTop: 12 }}>{t('settings.gplNote')}</div>
+        <div className="setting-hint settings-block">{t('settings.gplNote')}</div>
         {!isElectron && (
-          <div className="setting-hint" style={{ marginTop: 8, color: 'var(--yellow-deep)' }}>
-            ⚠︎ Browser preview mode — start the Electron app for real processing.
+          <div className="settings-warning">
+            <Icon name="warning" size={13} />
+            Browser preview mode — start the Electron app for real processing.
           </div>
         )}
       </div>
 
       {updateInfo && (
         <div className="modal-overlay" onClick={() => setUpdateInfo(null)}>
-          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={updateModalRef}
+            className="modal modal-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('settings.updateAvailable', { version: updateInfo.latestVersion })}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-head">
               <h3>{t('settings.updateAvailable', { version: updateInfo.latestVersion })}</h3>
-              <button className="icon-btn" onClick={() => setUpdateInfo(null)}>
+              <button className="icon-btn" title={t('common.close')} aria-label={t('common.close')} onClick={() => setUpdateInfo(null)}>
                 <Icon name="x" size={14} />
               </button>
             </div>

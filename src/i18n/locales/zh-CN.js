@@ -304,5 +304,6 @@ export default {
   'common.processing': "处理中…",
   'queue.finishingCancellation': "正在取消…",
   'settings.saveFailed': "保存设置失败",
-  'msg.instant': '即时完成,无需排队'
+  'msg.instant': '即时完成,无需排队',
+  'msg.probeFailed': '无法读取此文件的媒体信息'
 };

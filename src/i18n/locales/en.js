@@ -304,5 +304,6 @@ export default {
   'common.processing': "Processing…",
   'queue.finishingCancellation': "Finishing cancellation…",
   'settings.saveFailed': "Could not save settings",
-  'msg.instant': 'Instant — no queue needed'
+  'msg.instant': 'Instant — no queue needed',
+  'msg.probeFailed': 'Could not read this file\'s metadata'
 };

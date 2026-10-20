@@ -230,9 +230,9 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
         <p>{t('app.tagline')}</p>
       </div>
 
-      <div className="section-label">{t('extra.mainInput')}</div>
+      <div className="section-label meta-first">{t('extra.mainInput')}</div>
       <DropZone onFiles={addFiles} section={section} />
-      <div className="action-bar" style={{ marginTop: 10 }}>
+      <div className="action-bar">
         <button className="btn btn-secondary" onClick={browse}>
           <Icon name="plus" size={13} /> {t('common.addFiles')}
         </button>
@@ -254,7 +254,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
         reorderable={Boolean(op?.reorderable)}
       />
 
-      <div className="section-label" style={{ marginTop: 24 }}>{t(`nav.${section}`)}</div>
+      <div className="section-label">{t(`nav.${section}`)}</div>
       <OperationGrid ops={ops} selected={selectedOp} onSelect={selectOp} />
 
       {op && !op.modal && (
@@ -342,7 +342,9 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
 
       {metaFile && <MetadataModal file={metaFile} onClose={() => setMetaFile(null)} />}
 
-      {toast && <div className={`toast show ${toast.kind}`}>{toast.msg}</div>}
+      {toast && (
+        <div className={`toast ${toast.kind}`} role="status" aria-live="polite">{toast.msg}</div>
+      )}
     </div>
   );
 }

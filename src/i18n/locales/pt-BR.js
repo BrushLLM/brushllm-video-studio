@@ -304,5 +304,6 @@ export default {
   'common.processing': "Processando…",
   'queue.finishingCancellation': "Concluindo cancelamento…",
   'settings.saveFailed': "Não foi possível salvar as configurações",
-  'msg.instant': 'Instantâneo — não precisa de fila'
+  'msg.instant': 'Instantâneo — não precisa de fila',
+  'msg.probeFailed': 'Não foi possível ler os metadados deste arquivo'
 };

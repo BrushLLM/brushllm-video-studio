@@ -30,16 +30,18 @@ export default function FileList({ files, onRemove, onReorder, reorderable }) {
             <div className="file-meta">
               {f.probing
                 ? <span>{t('common.probing')}</span>
-                : f.probe
-                  ? <>
-                      {f.probe.video && <span>{f.probe.video.width}×{f.probe.video.height}</span>}
-                      {f.probe.durationSec > 0 && <span>{formatDuration(f.probe.durationSec)}</span>}
-                      {f.probe.video?.codec && <span>{f.probe.video.codec}</span>}
-                      {f.probe.audio?.codec && <span>{f.probe.audio.codec}</span>}
-                      {f.probe.bitrate > 0 && <span>{formatBitrate(f.probe.bitrate)}</span>}
-                      {f.probe.size > 0 && <span>{formatSize(f.probe.size)}</span>}
-                    </>
-                  : <span>{formatSize(f.size)}</span>}
+                : f.probeFailed
+                  ? <span className="file-meta-warning"><Icon name="warning" size={12} />{t('msg.probeFailed')}</span>
+                  : f.probe
+                    ? <>
+                        {f.probe.video && <span>{f.probe.video.width}×{f.probe.video.height}</span>}
+                        {f.probe.durationSec > 0 && <span>{formatDuration(f.probe.durationSec)}</span>}
+                        {f.probe.video?.codec && <span>{f.probe.video.codec}</span>}
+                        {f.probe.audio?.codec && <span>{f.probe.audio.codec}</span>}
+                        {f.probe.bitrate > 0 && <span>{formatBitrate(f.probe.bitrate)}</span>}
+                        {f.probe.size > 0 && <span>{formatSize(f.probe.size)}</span>}
+                      </>
+                    : <span>{formatSize(f.size)}</span>}
             </div>
           </div>
           <div className="file-actions">

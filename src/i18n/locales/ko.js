@@ -304,5 +304,6 @@ export default {
   'common.processing': "처리 중…",
   'queue.finishingCancellation': "취소 중…",
   'settings.saveFailed': "설정을 저장할 수 없습니다",
-  'msg.instant': '즉시 처리 — 대기열 불필요'
+  'msg.instant': '즉시 처리 — 대기열 불필요',
+  'msg.probeFailed': '이 파일의 메타데이터를 읽을 수 없습니다'
 };

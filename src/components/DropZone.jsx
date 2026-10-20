@@ -37,8 +37,15 @@ export default function DropZone({ onFiles, section = 'video' }) {
     <div
       className={`dropzone${dragover ? ' dragover' : ''}`}
       role="button"
+      tabIndex={0}
       aria-label={t('common.dragHere')}
       onClick={() => inputRef.current?.click()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       onDragOver={(e) => { e.preventDefault(); setDragover(true); }}
       onDragLeave={() => setDragover(false)}
       onDrop={handleDrop}
