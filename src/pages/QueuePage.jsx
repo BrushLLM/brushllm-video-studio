@@ -7,7 +7,17 @@ import { ActualSummary } from '../components/MediaSummary';
 import EmptyState from '../components/EmptyState';
 import { useModalFocus } from '../lib/useModalFocus';
 
-export default function QueuePage({ jobs, setJobs, platform = 'darwin' }) {
+// One plain-language line for the most common engine failures; the raw
+// error stays available under the disclosure.
+function errorSummaryKey(raw) {
+  const s = String(raw || '');
+  if (/EACCES|EPERM|permission/i.test(s)) return 'queue.errPermission';
+  if (/ENOENT|no such file/i.test(s)) return 'queue.errMissing';
+  if (/moov atom|invalid data|demux/i.test(s)) return 'queue.errCorrupt';
+  return 'queue.errGeneric';
+}
+
+export default function QueuePage({ jobs, setJobs, platform = 'darwin', onNavigate }) {
   const { t } = useI18n();
   const [toast, setToast] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // job pending delete confirmation
@@ -43,14 +53,19 @@ export default function QueuePage({ jobs, setJobs, platform = 'darwin' }) {
   };
 
   const pending = jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status)).length;
+  const failed = jobs.filter((j) => j.status === 'error').length;
   const revealLabel = platform === 'win32' ? t('common.revealWin') : t('common.reveal');
+  const headerStats = [
+    pending > 0 ? t('queue.jobsPending', { n: pending }) : null,
+    failed > 0 ? t('queue.jobsFailed', { n: failed }) : null
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className="page-inner">
       <div className="page-header split">
         <div>
-          <h1>{t('queue.title')}</h1>
-          <p>{pending > 0 ? t('queue.jobsPending', { n: pending }) : t('app.tagline')}</p>
+          <h1><span className="domain-dot neutral" aria-hidden="true" />{t('queue.title')}</h1>
+          <p>{headerStats || t('app.tagline')}</p>
         </div>
         {jobs.some((j) => ['done', 'error', 'canceled'].includes(j.status)) && (
           <button className="btn btn-secondary" onClick={clearFinished}>{t('queue.clearFinished')}</button>
@@ -62,7 +77,21 @@ export default function QueuePage({ jobs, setJobs, platform = 'darwin' }) {
           icon="queue"
           title={t('queue.empty')}
           sub={t('queue.emptyHint')}
-        />
+        >
+          {onNavigate && (
+            <div className="empty-actions">
+              <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('video')}>
+                <Icon name="video" size={13} /> {t('shortcut.openVideo')}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('audio')}>
+                <Icon name="audio" size={13} /> {t('shortcut.openAudio')}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('subtitle')}>
+                <Icon name="subtitle" size={13} /> {t('shortcut.openSubtitle')}
+              </button>
+            </div>
+          )}
+        </EmptyState>
       ) : (
         <div className="queue-list">
           {jobs.map((job) => (
@@ -168,10 +197,7 @@ function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteReque
         {job.status === 'running' && job.cpuPercent > 0 && (
           <span title="CPU">CPU {job.cpuPercent}%</span>
         )}
-        {elapsed > 0 && <span>{formatDuration(elapsed)}</span>}
-        {job.status === 'running' && showPercent && (
-          <span>{Math.min(99, Math.round(job.progress * 100))}%</span>
-        )}
+        {elapsed > 0 && <span>{t('queue.elapsed')} {formatDuration(elapsed)}</span>}
       </div>
 
       {active && (
@@ -187,7 +213,13 @@ function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteReque
         <div className="job-error">{t('queue.finishingCancellation')}</div>
       )}
       {job.status === 'error' && job.error && (
-        <div className="job-error">{job.error}</div>
+        <div className="job-error">
+          <span className="je-summary">{t(errorSummaryKey(job.error))}</span>
+          <details>
+            <summary>{t('queue.errorDetails')}</summary>
+            <div className="je-raw">{job.error}</div>
+          </details>
+        </div>
       )}
 
       {job.actual && <ActualSummary actual={job.actual} />}
@@ -236,7 +268,8 @@ function DeleteConfirmModal({ job, t, onClose, onDeleted }) {
           </button>
         </div>
         <div className="modal-body">
-          <p className="modal-text">{job.outputPath?.split(/[/\\]/).pop()}</p>
+          <p className="modal-text"><span className="modal-file">{job.outputPath?.split(/[/\\]/).pop()}</span></p>
+          {!hasOutput && <p className="modal-note">{t('modal.deleteQueueOnly')}</p>}
           {hasOutput && (
             <label className="modal-check">
               <input

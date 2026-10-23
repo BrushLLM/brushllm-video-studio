@@ -29,6 +29,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
   const [toast, setToast] = useState(null);
   const [metaFile, setMetaFile] = useState(null);
   const toastTimer = useRef(null);
+  const configRef = useRef(null);
 
   const op = ops.find((o) => o.id === selectedOp) || null;
 
@@ -88,10 +89,19 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
       setMetaFile(first);
       return;
     }
-    setSelectedOp(id === selectedOp ? null : id);
+    const opening = id !== selectedOp;
+    setSelectedOp(opening ? id : null);
     setParams(defaultParams(next));
     setExtras({});
     setSourceCharset('auto');
+    // The config panel sits below the whole tool grid — bring it into view
+    // as soon as a tool is selected so the first screen never feels dead.
+    if (opening) {
+      requestAnimationFrame(() => {
+        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+        configRef.current?.scrollIntoView({ behavior, block: 'start' });
+      });
+    }
   };
 
   // ------------------------------------------------------- plan + validation
@@ -231,17 +241,20 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
       </div>
 
       <div className="section-label meta-first">{t('extra.mainInput')}</div>
-      <DropZone onFiles={addFiles} section={section} />
+      <DropZone onFiles={addFiles} section={section} compact={files.length > 0} />
       <div className="action-bar">
         <button className="btn btn-secondary" onClick={browse}>
           <Icon name="plus" size={13} /> {t('common.addFiles')}
         </button>
         {files.length > 0 && (
-          <button className="btn btn-ghost" onClick={() => setFiles([])}>{t('common.clearAll')}</button>
+          <button className="btn btn-plain" onClick={() => setFiles([])}>{t('common.clearAll')}</button>
         )}
         {files.length > 0 && (
           <span className="action-note">
-            {files.length} {section === 'video' ? t('common.videoFile') : section === 'audio' ? t('common.audioFile') : t('common.subtitleFile')}
+            {(() => {
+              const base = section === 'video' ? 'videoFile' : section === 'audio' ? 'audioFile' : 'subtitleFile';
+              return `${files.length} ${t(files.length === 1 ? `common.${base}` : `common.${base}s`)}`;
+            })()}
             {op?.batch && mainInputs.length > 1 ? ` · ${t('common.batchNote')}` : ''}
           </span>
         )}
@@ -254,11 +267,11 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
         reorderable={Boolean(op?.reorderable)}
       />
 
-      <div className="section-label">{t(`nav.${section}`)}</div>
+      <div className="section-label">{t('section.tools')}</div>
       <OperationGrid ops={ops} selected={selectedOp} onSelect={selectOp} />
 
       {op && !op.modal && (
-        <>
+        <div ref={configRef}>
           <div className="section-label">{t(op.id)}</div>
           <ParamPanel op={op} params={params} setParams={setParams} files={files} gpuEncoders={gpuEncoders} />
 
@@ -296,7 +309,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
             </div>
           )}
 
-          {!op.instant && plan && <PlanSummary plan={plan} source={mainInputs[0]?.probe} />}
+          {!op.instant && plan && <PlanSummary plan={plan} source={mainInputs[0]?.probe} fileName={mainInputs[0]?.name} />}
 
           <div className="action-bar">
             <button
@@ -328,7 +341,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
               </button>
             )}
           </div>
-        </>
+        </div>
       )}
 
       <div className="action-bar shortcut-bar">

@@ -21,7 +21,7 @@ export default function FileList({ files, onRemove, onReorder, reorderable }) {
   return (
     <div className="file-list">
       {files.map((f, i) => (
-        <div key={f.path} className="file-row">
+        <div key={f.path} className={`file-row${f.probeFailed ? ' warning' : ''}`}>
           <div className={`file-icon ${f.kind}`}>
             <Icon name={KIND_ICON[f.kind] || 'doc'} size={17} />
           </div>
@@ -41,7 +41,7 @@ export default function FileList({ files, onRemove, onReorder, reorderable }) {
                         {f.probe.bitrate > 0 && <span>{formatBitrate(f.probe.bitrate)}</span>}
                         {f.probe.size > 0 && <span>{formatSize(f.probe.size)}</span>}
                       </>
-                    : <span>{formatSize(f.size)}</span>}
+                    : <span>{f.size > 0 ? formatSize(f.size) : (f.name.match(/\.([^.]+)$/)?.[1] || '').toUpperCase()}</span>}
             </div>
           </div>
           <div className="file-actions">

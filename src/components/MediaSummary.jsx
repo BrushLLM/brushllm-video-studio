@@ -18,7 +18,7 @@ function sizeDisplay(sizeEstimate, sizeNoteKey, t) {
   return t(sizeNoteKey || 'plan.sizeCRF');
 }
 
-export function PlanSummary({ plan, source }) {
+export function PlanSummary({ plan, source, fileName }) {
   const { t } = useI18n();
   if (!plan) return null;
   return (
@@ -27,8 +27,16 @@ export function PlanSummary({ plan, source }) {
       <div className="summary-cols">
         <div className="summary-col">
           <div className="summary-col-title">{t('plan.source')}</div>
+          {fileName && (
+            <SummaryRow label={t('common.fileName')}>
+              <span className="summary-filename" title={fileName}>{fileName}</span>
+            </SummaryRow>
+          )}
           {source && source.durationSec > 0 && (
             <SummaryRow label={t('common.duration')}>{formatDuration(source.durationSec)}</SummaryRow>
+          )}
+          {source && source.bitrate > 0 && (
+            <SummaryRow label={t('common.bitrate')}>{formatBitrate(source.bitrate)}</SummaryRow>
           )}
           {source && source.size > 0 && (
             <SummaryRow label={t('common.size')}>{formatSize(source.size)}</SummaryRow>

@@ -1,4 +1,5 @@
 import { useI18n } from '../i18n';
+import { Icon } from './icons';
 
 export function Segmented({ options, value, onChange, ariaLabel }) {
   const { t } = useI18n();
@@ -30,6 +31,7 @@ export function SliderField({ label, value, min, max, step, onChange, format, hi
     : format === 'dB' ? `${value > 0 ? '+' : ''}${value.toFixed(1)} dB`
     : format ? `${value}${format}`
     : String(value);
+  const fill = max > min ? ((value - min) / (max - min)) * 100 : 0;
   return (
     <div className="param-field wide">
       {label && <span className="param-label">{t(label)}</span>}
@@ -37,6 +39,8 @@ export function SliderField({ label, value, min, max, step, onChange, format, hi
         <input
           type="range" min={min} max={max} step={step} value={value}
           aria-label={label ? t(label) : undefined}
+          title={`${min} – ${max}`}
+          style={{ '--fill': `${fill}%` }}
           onChange={(e) => onChange(Number(e.target.value))}
         />
         <span className="slider-value">{display}</span>
@@ -168,6 +172,7 @@ export function PresetCards({ value, onChange }) {
         >
           <span className="preset-name">{t(`preset.${p}`)}</span>
           <span className="preset-desc">{t(`preset.${p}.desc`)}</span>
+          <span className="preset-check" aria-hidden="true"><Icon name="check" size={13} /></span>
         </button>
       ))}
     </div>

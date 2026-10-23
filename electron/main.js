@@ -433,7 +433,7 @@ function registerIpc() {
   });
 
   // External links (e.g. brushllm.com, GitHub releases) open in the browser.
-  const ALLOWED_EXTERNAL = /^https:\/\/(brushllm\.(com|pages\.dev)|www\.brushllm\.(com|pages\.dev)|github\.com\/BrushLLM\/brushllm-video-studio)(\/|$)/;
+  const ALLOWED_EXTERNAL = /^https:\/\/(brushllm\.(com|pages\.dev)|www\.brushllm\.(com|pages\.dev)|github\.com\/BrushLLM\/brushllm-video-studio|ffmpeg\.org|www\.ffmpeg\.org)(\/|$)/;
   ipcMain.handle('shell:openExternal', (_e, url) => {
     const target = String(url);
     if (!ALLOWED_EXTERNAL.test(target)) return false;

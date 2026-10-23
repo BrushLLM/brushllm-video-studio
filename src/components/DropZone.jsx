@@ -6,7 +6,7 @@ import { acceptsFor, VIDEO_EXTS, AUDIO_EXTS, SUBTITLE_EXTS } from '../../shared/
 
 const EXT_BY_KIND = { video: VIDEO_EXTS, audio: AUDIO_EXTS, subtitle: SUBTITLE_EXTS };
 
-export default function DropZone({ onFiles, section = 'video' }) {
+export default function DropZone({ onFiles, section = 'video', compact = false }) {
   const { t } = useI18n();
   const [dragover, setDragover] = useState(false);
   const inputRef = useRef(null);
@@ -35,7 +35,7 @@ export default function DropZone({ onFiles, section = 'video' }) {
 
   return (
     <div
-      className={`dropzone${dragover ? ' dragover' : ''}`}
+      className={`dropzone${dragover ? ' dragover' : ''}${compact ? ' compact' : ''}`}
       role="button"
       tabIndex={0}
       aria-label={t('common.dragHere')}

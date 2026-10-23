@@ -47,7 +47,7 @@
   --warning-tint: #fdf9d9;
 
   /* ---- danger ---- */
-  --danger-fill: #d93a3f; /* filled buttons, white text ≥4.5:1 */
+  --danger-fill: #cf3038; /* filled buttons, white text 5.1:1 */
   --danger: #e5484d; /* icons/graphics */
   --danger-text: #c22a35; /* text on tints */
   --danger-tint: #fdebec;
@@ -111,7 +111,7 @@
     color-scheme: dark;
 
     --bg: #131316;
-    --surface: #1d1d22;
+    --surface: #1f1f26;
     --surface-2: #26262c;
     --sidebar-bg: rgba(24, 24, 29, 0.82);
     --dropzone-bg: rgba(41, 41, 48, 0.5);
@@ -143,7 +143,7 @@
     --warning-text: #f4ea2a;
     --warning-tint: rgba(244, 234, 42, 0.1);
 
-    --danger-fill: #d93a3f;
+    --danger-fill: #cf3038;
     --danger: #ff6369;
     --danger-text: #ff7579;
     --danger-tint: rgba(255, 99, 105, 0.14);
@@ -211,7 +211,7 @@ textarea {
 
 :where(.btn, .nav-item, .icon-btn, .op-card, .preset-card, .segmented button,
        .switch, .dropzone, .footer-link, .update-link, .extra-pick,
-       .dz-sub button):focus-visible {
+       .extra-input-empty, .text-link, .dz-sub button):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -316,6 +316,8 @@ textarea {
   min-width: 18px;
   text-align: center;
 }
+.nav-badge + .nav-badge { margin-left: var(--space-1); }
+.nav-badge.danger { background: var(--danger-fill); }
 
 .sidebar-footer {
   margin-top: auto;
@@ -422,6 +424,19 @@ textarea {
   color: var(--accent-text);
 }
 
+/* Once files exist the zone collapses to a slim inline strip — the full
+   invite is no longer needed and vertical space belongs to the list. */
+.dropzone.compact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+}
+.dropzone.compact svg { margin-bottom: 0; }
+.dropzone.compact .dz-main { font-size: var(--text-base); }
+.dropzone.compact .dz-sub { margin-top: 0; margin-left: auto; }
+
 /* -------------------------------------------------------------- file list */
 
 .file-list { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
@@ -452,6 +467,12 @@ textarea {
 .file-info { min-width: 0; flex: 1; }
 .file-name { font-weight: 600; font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .file-meta { font-size: var(--text-xs); color: var(--text-3); display: flex; gap: 10px; flex-wrap: wrap; }
+.file-meta span + span::before { content: '·'; margin-right: 10px; opacity: 0.6; }
+
+/* A file whose probe failed carries the warning color on its icon tile and
+   a left edge, so the broken row is distinguishable at a glance. */
+.file-row.warning { border-left: 2px solid var(--warning-text); }
+.file-row.warning .file-icon { background: var(--warning-tint); color: var(--warning-text); }
 
 .file-meta-warning {
   display: inline-flex;
@@ -500,6 +521,9 @@ textarea {
 .domain-dot.video { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
 .domain-dot.audio { background: var(--success); box-shadow: 0 0 0 3px var(--success-tint); }
 .domain-dot.subtitle { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-tint); }
+/* Non-domain pages (Queue/Settings) get a neutral dot so every page title
+   starts at the same x position. */
+.domain-dot.neutral { background: var(--border-strong); box-shadow: none; }
 
 /* Lemon-yellow CTA for instant (non-queued) operations — echoes the
    yellow buttons on brushllm.com. */
@@ -516,8 +540,10 @@ textarea {
 
 .op-groups { display: flex; flex-direction: column; gap: var(--space-5); }
 
+/* Group labels sit one level below .section-label (11px vs 12px) so the
+   page section and the tool groups never read as siblings. */
 .op-group-label {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -525,9 +551,11 @@ textarea {
   margin-bottom: var(--space-2);
 }
 
+/* auto-fit collapses empty tracks so a 4-card row fills the container;
+   the 380px cap keeps sparse groups from stretching cards absurdly wide. */
 .op-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(236px, 380px));
   gap: var(--space-3);
 }
 
@@ -588,14 +616,16 @@ textarea {
 
 /* ------------------------------------------------------ quality presets */
 
+/* Exactly four presets — auto-fit stretches them across the full row. */
 .preset-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-2);
   margin-top: var(--space-1);
 }
 
 .preset-card {
+  position: relative;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -614,6 +644,16 @@ textarea {
   background: var(--accent-tint);
   box-shadow: 0 0 0 1px var(--accent);
 }
+
+/* Checkmark gives selected presets a shape cue beyond color. */
+.preset-check {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: none;
+  color: var(--accent-text);
+}
+.preset-card.selected .preset-check { display: block; }
 
 .preset-name { display: block; font-weight: 600; font-size: var(--text-sm); color: var(--text-1); }
 .preset-card.selected .preset-name { color: var(--accent-text); }
@@ -647,9 +687,34 @@ textarea {
 
 /* ------------------------------------------------------ extra input card */
 
+/* The accent follows the INPUT's domain: green for audio, lemon for
+   subtitles — matching the per-page domain colors of the tool grid. */
 .extra-input-card { padding: var(--space-3) var(--space-4); margin-top: var(--space-3); border-left: 3px solid var(--success-text); }
+.extra-input-card.kind-subtitle { border-left-color: var(--warning-text); }
 .extra-input-head { display: flex; align-items: center; gap: var(--space-1); color: var(--success-text); margin-bottom: var(--space-2); }
+.extra-input-card.kind-subtitle .extra-input-head,
+.extra-input-card.kind-subtitle .extra-input-head .param-label { color: var(--warning-text); }
 .extra-input-head .param-label { color: var(--success-text); }
+
+/* Empty state: a full-width pick target naming the accepted formats,
+   instead of a lone small button. */
+.extra-input-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--text-base);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.extra-input-empty:hover { border-color: var(--accent-soft); color: var(--text-1); }
+.extra-input-empty .eie-hint { margin-left: auto; font-size: var(--text-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .extra-input-list { display: flex; flex-direction: column; gap: var(--space-1); }
 .extra-input-row {
   display: flex;
@@ -676,6 +741,7 @@ textarea {
 .summary-row { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); padding: 2px 0; }
 .summary-label { color: var(--text-3); white-space: nowrap; }
 .summary-value { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: break-word; min-width: 0; }
+.summary-filename { font-family: var(--mono); font-size: var(--text-xs); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
 .summary-size { color: var(--accent-text); }
 .summary-cpu { color: var(--text-2); font-weight: 500; }
 
@@ -787,7 +853,9 @@ input[type='range'] {
 input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 2px;
-  background: var(--border-strong);
+  /* --fill (percentage, set inline by SliderField) tints the visited part
+     of the track so the thumb's position reads against the full range. */
+  background: linear-gradient(90deg, var(--accent) var(--fill, 0%), var(--border-strong) var(--fill, 0%));
 }
 
 input[type='range']::-webkit-slider-thumb {
@@ -831,6 +899,8 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(0.95); backg
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: transform var(--dur-base) var(--ease);
 }
+/* Color rule: toggles are mint green when ON (success-family), even though
+   purple is the primary-action color — a toggle expresses state, not action. */
 .switch.on { background: var(--success-strong); }
 .switch.on::after { transform: translateX(15px); }
 
@@ -874,6 +944,17 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(0.95); backg
 .btn-ghost:disabled { color: var(--text-3); cursor: default; }
 .btn-ghost:disabled:hover { background: transparent; }
 
+/* Neutral low-emphasis action (Clear All and siblings) — deliberately not
+   the brand accent: purple is reserved for primary/forward actions. */
+.btn-plain {
+  background: transparent;
+  color: var(--text-2);
+  padding: 6px 10px;
+}
+.btn-plain:hover { background: var(--surface-2); color: var(--text-1); }
+.btn-plain:disabled { color: var(--text-3); cursor: default; }
+.btn-plain:disabled:hover { background: transparent; color: var(--text-3); }
+
 .btn-terminate {
   background: var(--danger-fill);
   color: #fff;
@@ -909,6 +990,7 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(0.95); backg
 .job-title { font-weight: 600; font-size: var(--text-base); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .job-sub { font-size: var(--text-sm); color: var(--text-3); margin-top: 2px; display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.job-sub span + span::before { content: '·'; margin-right: var(--space-3); opacity: 0.6; }
 
 .chip {
   font-size: var(--text-xs);
@@ -953,18 +1035,33 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(0.95); backg
   border-radius: var(--radius-sm);
   padding: 7px 10px;
   font-size: var(--text-sm);
+  word-break: break-word;
+}
+.job-error .je-summary { font-weight: 600; }
+.job-error details { margin-top: var(--space-1); }
+.job-error summary { cursor: pointer; font-size: var(--text-xs); opacity: 0.85; }
+.job-error .je-raw {
+  margin-top: var(--space-1);
   font-family: var(--mono);
+  font-size: var(--text-xs);
   word-break: break-all;
+  opacity: 0.9;
 }
 
 .empty-state {
   text-align: center;
   padding: var(--space-9) var(--space-5);
   color: var(--text-3);
+  min-height: 46vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .empty-state svg { color: var(--border-strong); margin-bottom: var(--space-3); }
 .empty-state .es-title { font-weight: 600; font-size: var(--text-lg); color: var(--text-2); }
 .empty-state .es-sub { font-size: var(--text-base); margin-top: 3px; }
+.empty-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
 
 /* ---------------------------------------------------------------- settings */
 
@@ -1065,6 +1162,8 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(0.95); backg
 
 .modal-sm { width: min(420px, 92vw); }
 .modal-text { margin: 0 0 var(--space-3); font-size: var(--text-base); color: var(--text-2); word-break: break-all; }
+.modal-text .modal-file { font-family: var(--mono); font-size: var(--text-sm); color: var(--text-1); font-weight: 600; }
+.modal-note { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--text-3); }
 .modal-check {
   display: flex; align-items: center; gap: var(--space-2);
   font-size: var(--text-base); color: var(--text-1); cursor: pointer;
@@ -1168,6 +1267,19 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(0.95); backg
   text-underline-offset: 2px;
 }
 .update-link:hover { color: var(--accent); }
+
+/* Inline text link inside prose (e.g. ffmpeg.org in the GPL note). */
+.text-link {
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent-text);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.text-link:hover { color: var(--accent); }
 
 /* -------------------------------------------------------------- scrollbars */
 

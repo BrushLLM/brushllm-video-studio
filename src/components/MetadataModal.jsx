@@ -33,19 +33,19 @@ export default function MetadataModal({ file, onClose }) {
         <div className="modal-body">
           <div className="section-label meta-first">{t('meta.general')}</div>
           <dl className="meta-grid">
-            <dt>{t('meta.formatName')}</dt><dd>{s.formatName || '—'}</dd>
+            <dt>{t('meta.formatName')}</dt><dd>{s.container || s.formatName || '—'}</dd>
             <dt>{t('common.duration')}</dt><dd>{formatDuration(s.durationSec)}</dd>
             <dt>{t('common.size')}</dt><dd>{formatSize(s.size)}</dd>
-            <dt>{t('common.bitrate')}</dt><dd>{formatBitrate(s.bitrate)}</dd>
+            <dt>{t('meta.totalBitrate')}</dt><dd>{formatBitrate(s.bitrate)}</dd>
             {s.video && <>
               <dt>{t('common.resolution')}</dt><dd>{s.video.width}×{s.video.height}{s.video.rotation ? ` · ${s.video.rotation}°` : ''}</dd>
               <dt>{t('common.fps')}</dt><dd>{s.video.fps}</dd>
-              <dt>{t('common.codec')}</dt><dd>{s.video.codec}</dd>
+              <dt>{t('common.codec')}</dt><dd>{(s.video.codec || '').toUpperCase() || '—'}</dd>
             </>}
             {s.audio && <>
               <dt>{t('meta.sampleRate')}</dt><dd>{s.audio.sampleRate ? `${s.audio.sampleRate} Hz` : '—'}</dd>
               <dt>{t('meta.channels')}</dt><dd>{s.audio.channels}</dd>
-              <dt>{t('common.codec')}</dt><dd>{s.audio.codec}</dd>
+              <dt>{t('common.codec')}</dt><dd>{(s.audio.codec || '').toUpperCase() || '—'}</dd>
             </>}
           </dl>
 

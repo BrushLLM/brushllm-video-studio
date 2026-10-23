@@ -65,6 +65,8 @@ export default function SettingsPage({ settings, setSettings }) {
     }
   };
 
+  const enginePath = ffmpegPath || info?.ffmpegPath || '';
+
   return (
     <div className="page-inner">
       <div className="page-header">
@@ -93,7 +95,7 @@ export default function SettingsPage({ settings, setSettings }) {
             <div className="setting-hint">{t('settings.outputDirHint')}</div>
           </div>
           <div className="setting-controls">
-            {settings.outputDir && <span className="path-value">{settings.outputDir}</span>}
+            {settings.outputDir && <span className="path-value" title={settings.outputDir}>{settings.outputDir}</span>}
             <button className="btn btn-secondary" onClick={pickOutputDir}>{t('common.choose')}</button>
           </div>
         </div>
@@ -139,7 +141,7 @@ export default function SettingsPage({ settings, setSettings }) {
             <div className="setting-hint">{t('settings.bundledHint')}</div>
           </div>
           <div className="setting-controls">
-            <span className="path-value">{ffmpegPath || (info?.ffmpegPath || t('settings.bundled'))}</span>
+            <span className="path-value" title={enginePath}>{enginePath || t('settings.bundled')}</span>
             <button className="btn btn-secondary" onClick={pickFfmpeg}>{t('common.choose')}</button>
           </div>
         </div>
@@ -186,7 +188,9 @@ export default function SettingsPage({ settings, setSettings }) {
           </div>
           <div className="setting-hint">{t('settings.aiFutureText')}</div>
         </div>
-        <div className="setting-hint settings-block">{t('settings.gplNote')}</div>
+        <div className="setting-hint settings-block">
+          {t('settings.gplPre')} <button type="button" className="text-link" onClick={() => bridge.openExternal('https://ffmpeg.org')}>ffmpeg.org</button>{t('settings.gplPost')}
+        </div>
         {!isElectron && (
           <div className="settings-warning">
             <Icon name="warning" size={13} />

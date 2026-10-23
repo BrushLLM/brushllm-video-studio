@@ -50,6 +50,7 @@ export const Icons = {
   pause: (s) => wrap(<><path d="M8.5 5.5v13M15.5 5.5v13" /></>, s),
   stop: (s) => wrap(<><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" /></>, s),
   trash: (s) => wrap(<><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13" /><path d="M10 10.5v6M14 10.5v6" /></>, s),
+  check: (s) => wrap(<><path d="M5 12.5l4.5 4.5L19 7" /></>, s),
   warning: (s) => wrap(<><path d="M12 3.5l9 15.5H3z" /><path d="M12 10v4M12 16.8h.01" /></>, s),
   doc: (s) => wrap(<><path d="M6 2.5h8l4 4V21.5H6z" /><path d="M14 2.5v4h4" /></>, s),
   bolt: (s) => wrap(<><path d="M13 2.5L5 13.5h5l-1 8 8-11h-5z" /></>, s)

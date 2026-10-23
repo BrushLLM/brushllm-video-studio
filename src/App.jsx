@@ -22,6 +22,7 @@ function Shell({ settings, setSettings, jobs, setJobs, page, setPage, filesBySec
   const { t } = useI18n();
   // Same definition as QueuePage's pending count — paused jobs are still in flight.
   const pending = jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status)).length;
+  const failed = jobs.filter((j) => j.status === 'error').length;
 
   return (
     <div className="app">
@@ -44,6 +45,7 @@ function Shell({ settings, setSettings, jobs, setJobs, page, setPage, filesBySec
               <Icon name={item.icon} size={16} />
               {t(`nav.${item.id}`)}
               {item.id === 'queue' && pending > 0 && <span className="nav-badge">{pending}</span>}
+              {item.id === 'queue' && failed > 0 && <span className="nav-badge danger">{failed}</span>}
             </button>
           ))}
         </nav>
@@ -51,9 +53,9 @@ function Shell({ settings, setSettings, jobs, setJobs, page, setPage, filesBySec
           <button
             className="footer-link"
             onClick={() => bridge.openExternal('https://brushllm.com')}
-            title="brushllm.com"
+            title="BrushLLM.com"
           >
-            Brushllm.com
+            BrushLLM.com
           </button>
         </div>
       </aside>
@@ -85,7 +87,7 @@ function Shell({ settings, setSettings, jobs, setJobs, page, setPage, filesBySec
             gpuEncoders={gpuEncoders}
           />
         )}
-        {page === 'queue' && <QueuePage jobs={jobs} setJobs={setJobs} platform={platform} />}
+        {page === 'queue' && <QueuePage jobs={jobs} setJobs={setJobs} platform={platform} onNavigate={setPage} />}
         {page === 'settings' && <SettingsPage settings={settings} setSettings={setSettings} />}
       </main>
     </div>
