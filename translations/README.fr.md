@@ -1,4 +1,4 @@
-[English](/BrushLLM/brushllm-video-studio/blob/main/README.md) | [Deutsch](/BrushLLM/brushllm-video-studio/blob/main/translations/README.de.md) | [Español](/BrushLLM/brushllm-video-studio/blob/main/translations/README.es.md) | [Français](/BrushLLM/brushllm-video-studio/blob/main/translations/README.fr.md) | [Português (BR)](/BrushLLM/brushllm-video-studio/blob/main/translations/README.pt-BR.md) | [日本語](/BrushLLM/brushllm-video-studio/blob/main/translations/README.ja.md) | [简体中文](/BrushLLM/brushllm-video-studio/blob/main/translations/README.zh-CN.md) | [繁體中文](/BrushLLM/brushllm-video-studio/blob/main/translations/README.zh-TW.md) | [한국어](/BrushLLM/brushllm-video-studio/blob/main/translations/README.ko.md)
+[English](../README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (BR)](README.pt-BR.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [한국어](README.ko.md)
 
 ---
 
@@ -12,8 +12,8 @@ Une boîte à outils vidéo local-first — 33 opérations vidéo, audio et sous
 
 **📥 Téléchargement :** installateurs sur [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg` (Apple Silicon), Windows `.exe` (x64 / ARM64). Apps non signées : au premier lancement, macOS exige clic droit puis *Ouvrir* ; Windows affiche SmartScreen → *Exécuter quand même*.
 
-Développement et architecture : voir la [README en anglais](/BrushLLM/brushllm-video-studio/blob/main/README.md).
+Développement et architecture : voir la [README en anglais](../README.md).
 
 ## 📄 Licence
 
-Licence MIT — voir [LICENSE](LICENSE).
+Licence MIT — voir [LICENSE](../LICENSE).

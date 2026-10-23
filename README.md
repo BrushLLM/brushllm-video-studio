@@ -21,7 +21,7 @@
   <img src=".github/assets/screenshot.png" width="800" alt="BrushLLM Video Studio">
 </p>
 
-[English](/BrushLLM/brushllm-video-studio/blob/main/README.md) | [Deutsch](/BrushLLM/brushllm-video-studio/blob/main/translations/README.de.md) | [Español](/BrushLLM/brushllm-video-studio/blob/main/translations/README.es.md) | [Français](/BrushLLM/brushllm-video-studio/blob/main/translations/README.fr.md) | [Português (BR)](/BrushLLM/brushllm-video-studio/blob/main/translations/README.pt-BR.md) | [日本語](/BrushLLM/brushllm-video-studio/blob/main/translations/README.ja.md) | [简体中文](/BrushLLM/brushllm-video-studio/blob/main/translations/README.zh-CN.md) | [繁體中文](/BrushLLM/brushllm-video-studio/blob/main/translations/README.zh-TW.md) | [한국어](/BrushLLM/brushllm-video-studio/blob/main/translations/README.ko.md)
+[English](README.md) | [Deutsch](translations/README.de.md) | [Español](translations/README.es.md) | [Français](translations/README.fr.md) | [Português (BR)](translations/README.pt-BR.md) | [日本語](translations/README.ja.md) | [简体中文](translations/README.zh-CN.md) | [繁體中文](translations/README.zh-TW.md) | [한국어](translations/README.ko.md)
 
 ---
 

@@ -1,4 +1,4 @@
-[English](/BrushLLM/brushllm-video-studio/blob/main/README.md) | [Deutsch](/BrushLLM/brushllm-video-studio/blob/main/translations/README.de.md) | [Español](/BrushLLM/brushllm-video-studio/blob/main/translations/README.es.md) | [Français](/BrushLLM/brushllm-video-studio/blob/main/translations/README.fr.md) | [Português (BR)](/BrushLLM/brushllm-video-studio/blob/main/translations/README.pt-BR.md) | [日本語](/BrushLLM/brushllm-video-studio/blob/main/translations/README.ja.md) | [简体中文](/BrushLLM/brushllm-video-studio/blob/main/translations/README.zh-CN.md) | [繁體中文](/BrushLLM/brushllm-video-studio/blob/main/translations/README.zh-TW.md) | [한국어](/BrushLLM/brushllm-video-studio/blob/main/translations/README.ko.md)
+[English](../README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (BR)](README.pt-BR.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [한국어](README.ko.md)
 
 ---
 
@@ -12,8 +12,8 @@
 
 **📥 다운로드**: 최신 설치 파일은 [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) —— macOS `.dmg`(Apple Silicon), Windows `.exe`(x64 / ARM64). 앱은 서명되지 않았습니다 —— macOS는 첫 실행 시 마우스 오른쪽 클릭으로 *열기*를, Windows는 SmartScreen 경고에서 *실행*을 선택하세요.
 
-개발 및 아키텍처 세부 사항은 [영어 README](/BrushLLM/brushllm-video-studio/blob/main/README.md)를 참조하세요.
+개발 및 아키텍처 세부 사항은 [영어 README](../README.md)를 참조하세요.
 
 ## 📄 라이선스
 
-MIT 라이선스 — [LICENSE](LICENSE) 참조.
+MIT 라이선스 — [LICENSE](../LICENSE) 참조.
