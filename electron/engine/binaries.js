@@ -1,7 +1,7 @@
 // Resolves ffmpeg / ffprobe binary paths.
 // Priority: user override from settings -> per-platform thin binaries in
-// vendor/<platform>-<arch>/ (dev) or staged vendor/ (packaged) -> dev-only
-// npm fallbacks.
+// vendor/<platform>-<arch>/ (dev) or staged vendor/ (packaged) -> system
+// PATH (dev only).
 //
 // Supported platforms: darwin-arm64, win32-x64, win32-arm64.
 // Production packages carry ONLY the target binaries; a missing engine is a
@@ -38,14 +38,6 @@ function vendorPath(name) {
   return null;
 }
 
-function safeRequire(id) {
-  try {
-    return require(id);
-  } catch {
-    return null;
-  }
-}
-
 function resolveBinaries(userFfmpegPath, userFfprobePath) {
   let ffmpeg = userFfmpegPath || vendorPath('ffmpeg') || null;
   let ffprobe = userFfprobePath || vendorPath('ffprobe') || null;
@@ -58,13 +50,10 @@ function resolveBinaries(userFfmpegPath, userFfprobePath) {
         'The package is broken — please re-download or rebuild it.'
       );
     }
-    // Dev-only fallbacks (devDependencies, never shipped in production).
-    if (!ffmpeg) ffmpeg = unpacked(safeRequire('ffmpeg-static')) || 'ffmpeg';
-    if (!ffprobe) {
-      ffprobe = unpacked(safeRequire('@ffprobe-installer/ffprobe')?.path)
-        || unpacked(safeRequire('ffprobe-static')?.path)
-        || 'ffprobe';
-    }
+    // Dev-only fallback: the system PATH. vendor/ is the single binary
+    // source — run `npm run fetch-binaries` when it is missing.
+    if (!ffmpeg) ffmpeg = 'ffmpeg';
+    if (!ffprobe) ffprobe = 'ffprobe';
   }
   return { ffmpeg, ffprobe };
 }

@@ -351,8 +351,7 @@ test('queue cancel stops a running job', async () => {
   assert.equal(final.status, 'canceled');
 });
 
-test('pause freezes progress, resume completes the job (POSIX)', async () => {
-  if (process.platform === 'win32') return; // SIGSTOP is POSIX-only
+test('pause freezes progress, resume completes the job', async () => {
   const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('sample.mp4')], outputPath: out('t-pause.webm') });
   await waitForStatus(job.id, 'running');
   // Let it make some progress, then pause.
@@ -371,8 +370,7 @@ test('pause freezes progress, resume completes the job (POSIX)', async () => {
   assert.equal(final.progress, 1);
 });
 
-test('terminating a PAUSED job yields canceled — never done or stuck (POSIX)', async () => {
-  if (process.platform === 'win32') return;
+test('terminating a PAUSED job yields canceled — never done or stuck', async () => {
   const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('sample.mp4')], outputPath: out('t-pause-cancel.webm') });
   await waitForStatus(job.id, 'running');
   await new Promise((r) => setTimeout(r, 500));
@@ -405,14 +403,13 @@ test('progress is monotonic and never 100% while running', async () => {
   }
 });
 
-test('running jobs report live CPU utilization (POSIX)', async () => {
-  if (process.platform === 'win32') return;
+test('running jobs report live CPU utilization', async () => {
   const os = require('node:os');
   const seen = [];
   const listener = (j) => { if (j.status === 'running' && j.cpuPercent > 0) seen.push(j.cpuPercent); };
   manager.on('updated', listener);
   try {
-    // Slow VP9 gives the 1s sampler time to fire.
+    // Slow VP9 gives the sampler time to fire (2s cadence on Windows).
     const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('sample.mp4')], outputPath: out('t-cpu.webm') });
     const final = await waitForJob(job.id);
     assert.equal(final.status, 'done');

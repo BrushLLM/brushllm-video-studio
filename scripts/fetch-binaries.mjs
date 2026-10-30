@@ -1,5 +1,11 @@
 // Fetches per-platform, per-arch (thin) ffmpeg / ffprobe binaries into
-// vendor/<platform>-<arch>/. Run after install:  node scripts/fetch-binaries.mjs
+// vendor/<platform>-<arch>/. Run after install:  npm run fetch-binaries
+//
+// By default only the CURRENT platform is fetched (dev machines need just
+// their own). Options:
+//   --platform darwin-arm64            fetch one specific target
+//   --platform win32-x64,win32-arm64   comma-separated list
+//   --all                               fetch every supported target
 //
 // Supported targets (the only platforms this product ships on):
 //   darwin-arm64  ffmpeg-static b6.1.1 + @ffprobe-installer/darwin-arm64@5.0.1
@@ -157,11 +163,30 @@ async function fetchWindows(work, destDir, spec, arch) {
   // above are the executable verification for cross-built packages.
 }
 
+function resolveTargets() {
+  const ALL = Object.keys(PINNED);
+  const args = process.argv.slice(2);
+  const platformArg = args.find((a) => a.startsWith('--platform=') || a === '--platform');
+  let value = platformArg
+    ? (platformArg.includes('=') ? platformArg.split('=')[1] : args[args.indexOf(platformArg) + 1])
+    : null;
+  if (args.includes('--all')) return ALL;
+  if (!value) return [`${process.platform}-${process.arch}`];
+  const wanted = value.split(',').map((s) => s.trim()).filter(Boolean);
+  const unknown = wanted.filter((t) => !ALL.includes(t));
+  if (unknown.length) {
+    throw new Error(`Unknown platform(s): ${unknown.join(', ')}. Supported: ${ALL.join(', ')}`);
+  }
+  return wanted;
+}
+
 async function main() {
+  const targets = resolveTargets();
+  console.log(`fetching binaries for: ${targets.join(', ')}`);
   const work = join(tmpdir(), `brushvs-bin-${Date.now()}`);
   mkdirSync(work, { recursive: true });
   try {
-    for (const target of ['darwin-arm64', 'win32-x64', 'win32-arm64']) {
+    for (const target of targets) {
       const destDir = join(root, 'vendor', target);
       mkdirSync(destDir, { recursive: true });
       if (target === 'darwin-arm64') {

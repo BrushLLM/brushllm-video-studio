@@ -5,8 +5,10 @@ import { containerOfSource } from './media.mjs';
 import { validateOperation } from './validation.mjs';
 
 export const SUPPORTED_GPU_ENCODERS = Object.freeze([...contract.gpuEncoders]);
-export const GPU_H264_BY_PREFERENCE = ['h264_videotoolbox'];
-export const GPU_HEVC_BY_PREFERENCE = ['hevc_videotoolbox'];
+// macOS: VideoToolbox. Windows: NVENC (NVIDIA) > QSV (Intel) > AMF (AMD) —
+// the first encoder the -encoders snapshot actually reports is used.
+export const GPU_H264_BY_PREFERENCE = ['h264_videotoolbox', 'h264_nvenc', 'h264_qsv', 'h264_amf'];
+export const GPU_HEVC_BY_PREFERENCE = ['hevc_videotoolbox', 'hevc_nvenc', 'hevc_qsv', 'hevc_amf'];
 export const COPYABLE_AUDIO = contract.copyableAudio;
 export function isGpuEncoder(codec) { return SUPPORTED_GPU_ENCODERS.includes(codec); }
 const family = codec => isGpuEncoder(codec) ? codec.split('_')[0] : codec;
@@ -62,8 +64,9 @@ export function resolveEncoding(op, params, source, opts = {}) {
       cpuNote = true;
     }
   } else if (strategy !== 'cpu' && ['h264', 'hevc'].includes(family(videoCodec))) {
-    const target = `${family(videoCodec)}_videotoolbox`;
-    if ((opts.gpuEncoders || []).includes(target)) { videoCodec = target; hw = true; }
+    const prefs = family(videoCodec) === 'h264' ? GPU_H264_BY_PREFERENCE : GPU_HEVC_BY_PREFERENCE;
+    const target = prefs.find((c) => (opts.gpuEncoders || []).includes(c));
+    if (target) { videoCodec = target; hw = true; }
     else if (strategy === 'gpu') return { error: 'gpu-unavailable' };
     else cpuNote = true;
   }

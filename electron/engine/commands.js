@@ -83,9 +83,11 @@ function videoEncodeArgs(codec, q) {
   const bitrateK = q && Number(q.bitrate);
 
   if (isGpu(codec)) {
-    // VideoToolbox has no CRF; quality is bitrate-driven (UI enforces this).
+    // Hardware encoders are bitrate-driven (the UI enforces bitrate mode for
+    // GPU). VideoToolbox additionally accepts -q:v as a quality shortcut.
     if (bitrateK > 0) args.push('-b:v', `${Math.round(bitrateK)}k`);
-    else args.push('-q:v', '50');
+    else if (codec.endsWith('_videotoolbox')) args.push('-q:v', '50');
+    else args.push('-b:v', '6000k');
     return args;
   }
 
@@ -129,7 +131,8 @@ function containerExtras(container, videoCodec) {
   const ex = [];
   if (container === 'mp4' || container === 'mov') {
     ex.push('-movflags', '+faststart');
-    if (videoCodec === 'hevc' || videoCodec === 'hevc_videotoolbox') ex.push('-tag:v', 'hvc1');
+    // Any HEVC flavor (software or hardware) needs the hvc1 tag for Apple players.
+    if (videoCodec?.startsWith('hevc')) ex.push('-tag:v', 'hvc1');
   }
   return ex;
 }
@@ -189,7 +192,8 @@ const builders = {
       aCodec = aCodec === 'copy' && ['opus', 'vorbis'].includes(srcAudio) ? 'copy' : 'opus';
     }
     if (container === 'avi') {
-      if (['h264', 'hevc', 'av1', 'h264_videotoolbox', 'hevc_videotoolbox'].includes(vCodec)) vCodec = 'mpeg4';
+      const base = String(vCodec).split('_')[0];
+      if (['h264', 'hevc', 'av1'].includes(base)) vCodec = 'mpeg4';
       if (aCodec === 'copy' || aCodec === 'opus') aCodec = 'mp3';
     }
     const args = [

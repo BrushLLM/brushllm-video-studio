@@ -73,6 +73,44 @@ test('auto strategy uses VideoToolbox when available', () => {
   assert.ok(!args.includes('-crf'), 'GPU command must not fake CRF');
 });
 
+// Windows hardware encoders: NVENC > QSV > AMF preference, same contract.
+test('auto strategy picks NVENC on Windows-style detections', () => {
+  const WIN = ['h264_nvenc', 'hevc_nvenc', 'h264_qsv', 'hevc_qsv', 'h264_amf', 'hevc_amf'];
+  const r = resolve.resolveEncoding('video.convert',
+    { container: 'mp4', videoCodec: 'h264', crf: 23, mode: 'crf', qualityPreset: 'balanced', hwStrategy: 'auto', audioCodec: 'auto' },
+    SOURCE, { gpuEncoders: WIN });
+  assert.equal(r.videoCodec, 'h264_nvenc', 'NVENC must outrank QSV/AMF');
+  assert.equal(r.hw, true);
+  assert.equal(r.mode, 'bitrate');
+  assert.ok(r.videoBitrate > 0);
+
+  const args = commandFor(resolve.applyResolved({ videoCodec: 'h264', crf: 23, mode: 'crf' }, r));
+  assert.equal(args[args.indexOf('-c:v') + 1], 'h264_nvenc');
+  assert.equal(args[args.indexOf('-b:v') + 1], `${r.videoBitrate}k`);
+  assert.ok(!args.includes('-q:v'), 'NVENC must not get the VideoToolbox -q:v flag');
+});
+
+test('auto strategy falls back QSV -> AMF when NVENC is absent', () => {
+  const r = resolve.resolveEncoding('video.convert',
+    { container: 'mp4', videoCodec: 'h264', crf: 23, mode: 'crf', hwStrategy: 'auto' },
+    SOURCE, { gpuEncoders: ['h264_qsv', 'h264_amf'] });
+  assert.equal(r.videoCodec, 'h264_qsv');
+
+  const r2 = resolve.resolveEncoding('video.convert',
+    { container: 'mp4', videoCodec: 'hevc', crf: 26, mode: 'crf', hwStrategy: 'auto' },
+    SOURCE, { gpuEncoders: ['hevc_amf'] });
+  assert.equal(r2.videoCodec, 'hevc_amf');
+});
+
+test('Windows HEVC encoders get the hvc1 tag in MP4', () => {
+  const r = resolve.resolveEncoding('video.convert',
+    { container: 'mp4', videoCodec: 'hevc', crf: 26, mode: 'crf', hwStrategy: 'auto' },
+    SOURCE, { gpuEncoders: ['hevc_nvenc'] });
+  const args = commandFor(resolve.applyResolved({ videoCodec: 'hevc', crf: 26, mode: 'crf' }, r));
+  assert.equal(args[args.indexOf('-c:v') + 1], 'hevc_nvenc');
+  assert.ok(args.includes('hvc1'), 'HEVC NVENC in MP4 needs the hvc1 tag');
+});
+
 test('auto strategy falls back to CPU honestly when no GPU', () => {
   const r = resolve.resolveEncoding('video.convert',
     { container: 'mp4', videoCodec: 'h264', crf: 23, mode: 'crf', hwStrategy: 'auto' },

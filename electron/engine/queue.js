@@ -10,6 +10,26 @@ const { reservePath, publishFile, publishSequence, deleteArtifact } = require('.
 const TERMINAL = new Set(['done', 'error', 'canceled']);
 const concurrencyOf = (n) => Number.isInteger(Number(n)) ? Math.max(1, Math.min(4, Number(n))) : 1;
 const canceledError = () => Object.assign(new Error('Job canceled'), { name: 'AbortError' });
+const IS_WIN = process.platform === 'win32';
+// PowerShell startup (~300ms) makes the 600ms POSIX cadence impractical.
+const WIN_CPU_INTERVAL_MS = 2000;
+
+// Windows has no SIGSTOP. Suspend/resume the ffmpeg process via ntdll
+// (the same mechanism Process Explorer / Sysinternals use).
+const winSuspendResume = (pid, suspend) => {
+  const verb = suspend ? 'Suspend' : 'Resume';
+  const script =
+    `$p = Get-Process -Id ${pid} -ErrorAction Stop; ` +
+    `$t = Add-Type -MemberDefinition '[DllImport("ntdll.dll")] public static extern int Nt${verb}Process(IntPtr h);' ` +
+    `-Name ProcCtl -Namespace Win32 -PassThru; ` +
+    `$t::Nt${verb}Process($p.Handle) | Out-Null; 'ok'`;
+  try {
+    const r = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: 15000 });
+    return r.status === 0 && String(r.stdout).includes('ok');
+  } catch {
+    return false;
+  }
+};
 
 function expectedDuration(op, p, probes) {
   let duration = probes[0]?.durationSec || 0;
@@ -104,13 +124,17 @@ class JobManager extends EventEmitter {
     return true;
   }
 
-  static get canPause() { return process.platform !== 'win32'; }
+  static get canPause() { return true; }
 
   pause(id) {
     const job = this.jobs.get(id);
     const child = this._children.get(id);
-    if (!JobManager.canPause || job?.status !== 'running' || !child || child !== job.attempt?.child) return false;
-    try { if (!child.kill('SIGSTOP')) return false; } catch { return false; }
+    if (job?.status !== 'running' || !child || child !== job.attempt?.child) return false;
+    if (IS_WIN) {
+      if (!child.pid || !winSuspendResume(child.pid, true)) return false;
+    } else {
+      try { if (!child.kill('SIGSTOP')) return false; } catch { return false; }
+    }
     job.status = 'paused';
     job.speed = 0;
     this._emit(job);
@@ -121,7 +145,11 @@ class JobManager extends EventEmitter {
     const job = this.jobs.get(id);
     const child = this._children.get(id);
     if (job?.status !== 'paused' || !child || child !== job.attempt?.child) return false;
-    try { if (!child.kill('SIGCONT')) return false; } catch { return false; }
+    if (IS_WIN) {
+      if (!child.pid || !winSuspendResume(child.pid, false)) return false;
+    } else {
+      try { if (!child.kill('SIGCONT')) return false; } catch { return false; }
+    }
     job.status = 'running';
     this._emit(job);
     return true;
@@ -319,6 +347,7 @@ class JobManager extends EventEmitter {
       let startError = null;
       let criticalError = false;
       let stdoutBuf = '';
+      let lastCpuSec = null;
       const report = (sec, speed) => {
         if (job.attempt !== attempt || job.status !== 'running' || signal.aborted) return;
         const fraction = job.expectedDuration > 0 ? Math.max(0, Math.min(1, sec / job.expectedDuration)) : 0;
@@ -326,14 +355,31 @@ class JobManager extends EventEmitter {
         if (Number.isFinite(speed)) job.speed = speed;
         this._emit(job);
       };
-      const cpuSampler = process.platform !== 'win32' ? setInterval(() => {
+      const cpuSampler = setInterval(() => {
         if (job.status !== 'running' || !child.pid) return;
         try {
-          const result = spawnSync('ps', ['-o', 'pcpu=', '-p', String(child.pid)], { encoding: 'utf8', timeout: 1000 });
-          const pct = parseFloat(result.stdout);
-          if (Number.isFinite(pct)) { job.cpuPercent = Math.round(pct); this._emit(job); }
+          if (IS_WIN) {
+            // (Get-Process).CPU = cumulative processor seconds; diff between
+            // samples gives the utilization (can exceed 100% on many cores,
+            // matching what `ps pcpu` reports on macOS).
+            const r = spawnSync('powershell.exe',
+              ['-NoProfile', '-Command', `(Get-Process -Id ${child.pid}).CPU`],
+              { encoding: 'utf8', timeout: 3000 });
+            const cpuSec = parseFloat(r.stdout);
+            if (Number.isFinite(cpuSec)) {
+              if (lastCpuSec != null) {
+                const pct = Math.round(((cpuSec - lastCpuSec) / (WIN_CPU_INTERVAL_MS / 1000)) * 100);
+                if (pct >= 0) { job.cpuPercent = pct; this._emit(job); }
+              }
+              lastCpuSec = cpuSec;
+            }
+          } else {
+            const result = spawnSync('ps', ['-o', 'pcpu=', '-p', String(child.pid)], { encoding: 'utf8', timeout: 1000 });
+            const pct = parseFloat(result.stdout);
+            if (Number.isFinite(pct)) { job.cpuPercent = Math.round(pct); this._emit(job); }
+          }
         } catch { /* CPU sampling is optional. */ }
-      }, 600) : null;
+      }, IS_WIN ? WIN_CPU_INTERVAL_MS : 600);
       child.stdout.on('data', (data) => {
         stdoutBuf += data;
         const lines = stdoutBuf.split('\n');

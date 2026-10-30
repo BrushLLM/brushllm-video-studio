@@ -19,7 +19,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Fetch pinned media engine (SHA-256 verified)
-        run: node scripts/fetch-binaries.mjs
+        run: node scripts/fetch-binaries.mjs --platform darwin-arm64
+      - name: Unit + end-to-end tests (real FFmpeg)
+        run: npm test
       - run: npm run dist:mac-arm64 -- --publish never
       - uses: actions/upload-artifact@v4
         with:
@@ -38,7 +40,10 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Fetch pinned media engine (SHA-256 verified)
-        run: node scripts/fetch-binaries.mjs
+        run: node scripts/fetch-binaries.mjs --platform win32-x64,win32-arm64
+        shell: bash
+      - name: Unit + end-to-end tests (real FFmpeg, Windows paths)
+        run: npm test
         shell: bash
       - run: npm run dist:win-x64 -- --publish never
         shell: bash

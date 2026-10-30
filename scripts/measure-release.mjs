@@ -65,9 +65,7 @@ for (const build of BUILDS) {
         console.log(`    vendor/${tool}: ${mb(p)} — ${info} — sha256:${sha(p)}`);
       }
     }
-    for (const stray of ['node_modules/ffmpeg-static', 'node_modules/@ffprobe-installer']) {
-      const p = join(unpacked, stray);
-      if (existsSync(p)) console.log(`  ⚠︎ UNEXPECTED fallback shipped: ${stray} (${dirMb(p)})`);
-    }
+    const strayNodeModules = join(unpacked, 'node_modules');
+    if (existsSync(strayNodeModules)) console.log(`  ⚠︎ UNEXPECTED node_modules shipped: ${dirMb(strayNodeModules)}`);
   }
 }
