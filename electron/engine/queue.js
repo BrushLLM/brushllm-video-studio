@@ -358,11 +358,11 @@ class JobManager extends EventEmitter {
       };
       const cpuSampler = setInterval(() => {
         if (job.status !== 'running' || !child.pid) return;
-        // spawnSync blocks the loop; callbacks that piled up during the
-        // block must not fire back-to-back and cascade into more blocking.
+        // lastSampleAt marks the END of the previous sample; a sample that
+        // starts sooner than one interval later is a callback that piled up
+        // while spawnSync blocked the loop — skip it.
         const interval = IS_WIN ? WIN_CPU_INTERVAL_MS : 600;
-        if (Date.now() - lastSampleAt < interval * 0.9) return;
-        lastSampleAt = Date.now();
+        if (Date.now() - lastSampleAt < interval) return;
         try {
           if (IS_WIN) {
             // (Get-Process).CPU = cumulative processor seconds; diff between
@@ -373,8 +373,9 @@ class JobManager extends EventEmitter {
               { encoding: 'utf8', timeout: 3000 });
             const cpuSec = parseFloat(r.stdout);
             if (Number.isFinite(cpuSec)) {
-              if (lastCpuSec != null) {
-                const pct = Math.round(((cpuSec - lastCpuSec) / ((Date.now() - lastSampleAt) / 1000)) * 100);
+              if (lastCpuSec != null && lastSampleAt > 0) {
+                const elapsed = Math.max(0.5, (Date.now() - lastSampleAt) / 1000);
+                const pct = Math.round(((cpuSec - lastCpuSec) / elapsed) * 100);
                 if (pct >= 0) { job.cpuPercent = pct; this._emit(job); }
               }
               lastCpuSec = cpuSec;
@@ -385,6 +386,7 @@ class JobManager extends EventEmitter {
             if (Number.isFinite(pct)) { job.cpuPercent = Math.round(pct); this._emit(job); }
           }
         } catch { /* CPU sampling is optional. */ }
+        lastSampleAt = Date.now();
       }, IS_WIN ? WIN_CPU_INTERVAL_MS : 600);
       child.stdout.on('data', (data) => {
         stdoutBuf += data;

@@ -80,11 +80,13 @@ before(async () => {
     '-shortest', out('sample2.mp4')]);
   ff(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=5',
     '-c:a', 'libmp3lame', '-b:a', '128k', out('sample.mp3')]);
-  // 12s sample for pause/resume + CPU-sampling tests: the Windows suspend
-  // path takes ~2s (PowerShell), so the job must outlive it comfortably.
+  // 30s sample for pause/resume + CPU-sampling tests. The Windows suspend
+  // path takes ~2s (PowerShell) and the first Windows CPU diff lands around
+  // +7s (baseline tick + PowerShell latency + diff tick) — the job must
+  // outlive both comfortably even on fast CI runners.
   ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=15',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=12',
-    '-t', '12', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', ...KF, '-c:a', 'aac',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=30',
+    '-t', '30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', ...KF, '-c:a', 'aac',
     '-shortest', out('long.mp4')]);
   fs.writeFileSync(out('sample.srt'),
     `1
@@ -415,8 +417,8 @@ test('running jobs report live CPU utilization', async () => {
   const listener = (j) => { if (j.status === 'running' && j.cpuPercent > 0) seen.push(j.cpuPercent); };
   manager.on('updated', listener);
   try {
-    // Slow VP9 on the 12s input gives the sampler time to fire (the first
-    // Windows diff lands at +4s: baseline at tick 1, value at tick 2).
+    // Slow VP9 on the 30s input gives the sampler time to fire (the first
+    // Windows diff lands around +7s: baseline, PowerShell latency, diff).
     const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('long.mp4')], outputPath: out('t-cpu.webm') });
     const final = await waitForJob(job.id);
     assert.equal(final.status, 'done');
