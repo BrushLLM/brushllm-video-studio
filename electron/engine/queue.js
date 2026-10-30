@@ -348,6 +348,7 @@ class JobManager extends EventEmitter {
       let criticalError = false;
       let stdoutBuf = '';
       let lastCpuSec = null;
+      let lastSampleAt = 0;
       const report = (sec, speed) => {
         if (job.attempt !== attempt || job.status !== 'running' || signal.aborted) return;
         const fraction = job.expectedDuration > 0 ? Math.max(0, Math.min(1, sec / job.expectedDuration)) : 0;
@@ -357,6 +358,11 @@ class JobManager extends EventEmitter {
       };
       const cpuSampler = setInterval(() => {
         if (job.status !== 'running' || !child.pid) return;
+        // spawnSync blocks the loop; callbacks that piled up during the
+        // block must not fire back-to-back and cascade into more blocking.
+        const interval = IS_WIN ? WIN_CPU_INTERVAL_MS : 600;
+        if (Date.now() - lastSampleAt < interval * 0.9) return;
+        lastSampleAt = Date.now();
         try {
           if (IS_WIN) {
             // (Get-Process).CPU = cumulative processor seconds; diff between
@@ -368,7 +374,7 @@ class JobManager extends EventEmitter {
             const cpuSec = parseFloat(r.stdout);
             if (Number.isFinite(cpuSec)) {
               if (lastCpuSec != null) {
-                const pct = Math.round(((cpuSec - lastCpuSec) / (WIN_CPU_INTERVAL_MS / 1000)) * 100);
+                const pct = Math.round(((cpuSec - lastCpuSec) / ((Date.now() - lastSampleAt) / 1000)) * 100);
                 if (pct >= 0) { job.cpuPercent = pct; this._emit(job); }
               }
               lastCpuSec = cpuSec;

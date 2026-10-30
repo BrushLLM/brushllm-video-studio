@@ -80,6 +80,12 @@ before(async () => {
     '-shortest', out('sample2.mp4')]);
   ff(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=5',
     '-c:a', 'libmp3lame', '-b:a', '128k', out('sample.mp3')]);
+  // 12s sample for pause/resume + CPU-sampling tests: the Windows suspend
+  // path takes ~2s (PowerShell), so the job must outlive it comfortably.
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=15',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=12',
+    '-t', '12', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', ...KF, '-c:a', 'aac',
+    '-shortest', out('long.mp4')]);
   fs.writeFileSync(out('sample.srt'),
     `1
 00:00:01,000 --> 00:00:03,000
@@ -352,7 +358,7 @@ test('queue cancel stops a running job', async () => {
 });
 
 test('pause freezes progress, resume completes the job', async () => {
-  const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('sample.mp4')], outputPath: out('t-pause.webm') });
+  const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('long.mp4')], outputPath: out('t-pause.webm') });
   await waitForStatus(job.id, 'running');
   // Let it make some progress, then pause.
   await new Promise((r) => setTimeout(r, 700));
@@ -371,7 +377,7 @@ test('pause freezes progress, resume completes the job', async () => {
 });
 
 test('terminating a PAUSED job yields canceled — never done or stuck', async () => {
-  const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('sample.mp4')], outputPath: out('t-pause-cancel.webm') });
+  const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('long.mp4')], outputPath: out('t-pause-cancel.webm') });
   await waitForStatus(job.id, 'running');
   await new Promise((r) => setTimeout(r, 500));
   assert.equal(manager.pause(job.id), true);
@@ -409,8 +415,9 @@ test('running jobs report live CPU utilization', async () => {
   const listener = (j) => { if (j.status === 'running' && j.cpuPercent > 0) seen.push(j.cpuPercent); };
   manager.on('updated', listener);
   try {
-    // Slow VP9 gives the sampler time to fire (2s cadence on Windows).
-    const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('sample.mp4')], outputPath: out('t-cpu.webm') });
+    // Slow VP9 on the 12s input gives the sampler time to fire (the first
+    // Windows diff lands at +4s: baseline at tick 1, value at tick 2).
+    const job = await manager.add({ op: 'video.convert', params: { container: 'webm', crf: 32, encodeSpeed: 'slow' }, inputs: [out('long.mp4')], outputPath: out('t-cpu.webm') });
     const final = await waitForJob(job.id);
     assert.equal(final.status, 'done');
     assert.ok(seen.length >= 1, 'CPU sampler must fire at least once during a multi-second job');
