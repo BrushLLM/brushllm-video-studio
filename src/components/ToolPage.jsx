@@ -144,10 +144,11 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
       if (!video.probe?.subtitleStreams?.length) return { ok: false, reason: t('common.noStreams') };
     }
     // Use shared validation for non-instant operations. validateOperation
-    // returns an issues ARRAY ([] = valid) — never read .ok off it.
+    // returns an issues ARRAY ([] = valid) — never read .ok off it. The
+    // first issue renders through its localized validation.<code> key.
     const issues = resolved?.validationResult;
     if (!op.instant && Array.isArray(issues) && issues.length) {
-      return { ok: false, reason: issues[0].message };
+      return { ok: false, reason: t(`validation.${issues[0].code}`, issues[0].params) };
     }
     if (params.videoBitrate != null && params.videoBitrate !== '') {
       const n = Number(params.videoBitrate);

@@ -3,7 +3,10 @@
 export function validateOperation(op, params = {}, source = null, opts = {}) {
   const p = params || {};
   const issues = [];
-  const add = (field, code, message) => issues.push({ field, code, message });
+  // `params` carries interpolation values for the localized message
+  // (renderer shows t(`validation.${code}`, params); the English `message`
+  // stays the engine-side fallback for the IPC boundary).
+  const add = (field, code, message, vars) => issues.push(vars ? { field, code, message, params: vars } : { field, code, message });
   const present = value => value != null && value !== '';
   const finite = value => present(value) && typeof value !== 'boolean' && Number.isFinite(Number(value));
   const positive = (field, value, required = false) => {
@@ -52,7 +55,7 @@ export function validateOperation(op, params = {}, source = null, opts = {}) {
     if (present(p.sampleRate) && ![8000, 12000, 16000, 24000, 48000].includes(Number(p.sampleRate))) add('sampleRate', 'opus-sample-rate', 'Opus supports 8000, 12000, 16000, 24000 or 48000 Hz (not 44100 Hz)');
     const channels = Number(p.channels || source?.audio?.channels || 2);
     const bitrate = Number(p.bitrate ?? p.audioBitrate ?? 160);
-    if (Number.isFinite(bitrate) && (bitrate < 6 || bitrate > 256 * channels)) add(p.bitrate !== undefined ? 'bitrate' : 'audioBitrate', 'opus-bitrate', `Opus bitrate must be between 6 and ${256 * channels} kbps for ${channels} channel(s)`);
+      if (Number.isFinite(bitrate) && (bitrate < 6 || bitrate > 256 * channels)) add(p.bitrate !== undefined ? 'bitrate' : 'audioBitrate', 'opus-bitrate', `Opus bitrate must be between 6 and ${256 * channels} kbps for ${channels} channel(s)`, { max: 256 * channels, channels });
   }
   if (op === 'video.merge' && (opts.allProbes || []).some(s => (s?.audioStreams?.length || 0) > 1 || (s?.videoStreams?.filter(v => !v.attachedPic).length || 0) > 1) && (p.mergeMode || p.mode) === 'reencode') add('mode', 'ambiguous-streams', 'Re-encode merge requires one main video and at most one audio stream per input; multi-track correspondence is ambiguous');
   return issues;

@@ -151,6 +151,8 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     vibrancy: 'sidebar',
+    // Window/taskbar icon for Windows & Linux dev runs (macOS uses the Dock).
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     // Follows the system appearance so a dark-mode launch never flashes white.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#131316' : '#fafaf9',
     title: 'BrushLLM Video Studio',
@@ -534,6 +536,14 @@ function registerIpc() {
 // ------------------------------------------------------------------ boot
 
 app.whenReady().then(async () => {
+  app.setName('BrushLLM Video Studio');
+  // Dev-mode brand identity: packaged builds get their icon and name from
+  // electron-builder; running from node_modules would otherwise show the
+  // generic Electron icon in the Dock. (The Dock hover name still comes
+  // from the binary's Info.plist in dev — only packaging fixes that.)
+  if (process.platform === 'darwin' && app.dock) {
+    try { app.dock.setIcon(path.join(__dirname, '..', 'build', 'icon.png')); } catch { /* dev-only nicety */ }
+  }
   try {
     settings = loadSettings();
     const { ffmpeg, ffprobe } = resolveBinaries(settings.ffmpegPath, settings.ffprobePath);

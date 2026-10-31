@@ -68,6 +68,12 @@ test('every t(...) key used in the renderer exists in the locale tables', () => 
     used.add(k);
   }
   for (const p of ['compat', 'balanced', 'quality', 'small']) used.add(`preset.${p}.desc`);
+  // Validation issue codes, composed as t(`validation.${code}`) in ToolPage.
+  for (const code of ['positive-number', 'invalid-time', 'invalid-time-range', 'outside-duration',
+    'even-dimension', 'crop-bounds', 'crop-offset', 'speed-range', 'sample-rate', 'channels',
+    'opus-sample-rate', 'opus-bitrate', 'ambiguous-streams']) {
+    used.add(`validation.${code}`);
+  }
 
   const missing = [...used].filter((k) => !(k in en));
   assert.deepStrictEqual(missing, [], `keys missing from locales: ${missing.join(', ')}`);
