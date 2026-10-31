@@ -53,10 +53,14 @@ export default function QueuePage({ jobs, setJobs, platform = 'darwin', onNaviga
   };
 
   const pending = jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status)).length;
+  const running = jobs.filter((j) => j.status === 'running').length;
   const failed = jobs.filter((j) => j.status === 'error').length;
   const revealLabel = platform === 'win32' ? t('common.revealWin') : t('common.reveal');
+  // Running jobs read as "in progress"; queued/paused read as "pending" —
+  // split counts keep the header wording honest for mixed states.
   const headerStats = [
-    pending > 0 ? t('queue.jobsPending', { n: pending }) : null,
+    running > 0 ? t('queue.jobsRunning', { n: running }) : null,
+    pending - running > 0 ? t('queue.jobsPending', { n: pending - running }) : null,
     failed > 0 ? t('queue.jobsFailed', { n: failed }) : null
   ].filter(Boolean).join(' · ');
 
