@@ -3,7 +3,18 @@
 
 const real = typeof window !== 'undefined' ? window.brushvs : null;
 
+// Dev-only overrides for cross-platform UI verification from the browser
+// preview: append query params like ?platform=win32&gpu=h264_nvenc,hevc_nvenc
+// (or &locale=de-DE) to render the Windows branches from any browser.
+// These never apply inside the Electron app, where the real bridge is used.
 function makeMock() {
+  const q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const override = (key, fallback) => (q.get(key) || fallback);
+  const mockPlatform = override('platform', 'darwin');
+  const mockArch = override('arch', mockPlatform === 'win32' ? 'x64' : 'arm64');
+  const mockGpu = override('gpu', 'h264_videotoolbox,hevc_videotoolbox').split(',').filter(Boolean);
+  const mockLocale = override('locale', 'zh-CN');
+  const mockVersion = override('v', '0.0.6');
   const settings = { language: 'system', ffmpegPath: '', ffprobePath: '', outputDir: '', concurrency: 1, preventSleep: true };
   const listeners = { updated: [], removed: [] };
   const jobs = new Map();
@@ -28,9 +39,9 @@ function makeMock() {
     getSettings: async () => ({ ...settings }),
     setSettings: async (patch) => ({ ...Object.assign(settings, patch) }),
     appInfo: async () => ({
-      version: '0.0.1', electron: '33.4.11', node: '22.17.0', cpuCount: 12,
-      ffmpegPath: '/usr/local/bin/ffmpeg (mock)', locale: 'zh-CN',
-      platform: 'darwin', arch: 'arm64', gpuEncoders: ['h264_videotoolbox', 'hevc_videotoolbox'],
+      version: mockVersion, electron: '33.4.11', node: '22.17.0', cpuCount: 12,
+      ffmpegPath: '/usr/local/bin/ffmpeg (mock)', locale: mockLocale,
+      platform: mockPlatform, arch: mockArch, gpuEncoders: mockGpu,
       userData: '~/.mock'
     }),
     checkForUpdate: async () => ({
@@ -74,10 +85,12 @@ function makeMock() {
       };
       jobs.set(id, job);
       emit(job);
-      // Realistic pacing: ~15 s per job, smooth monotonic progress that
-      // never reads as 100% while running, pausable like a real encode.
+      // Realistic pacing: ~2 min per job by default; ?speed=N compresses the
+      // pacing for UI testing. Smooth monotonic progress that never reads as
+      // 100% while running, pausable like a real encode.
+      const SPEED = Number(q.get('speed') || 1) || 1;
       const TICK_MS = 300;
-      const INCREMENT = 0.0021 + Math.random() * 0.0008;
+      const INCREMENT = (0.0021 + Math.random() * 0.0008) * SPEED;
       const timer = setInterval(() => {
         if (job.status !== 'running') return; // paused: progress freezes
         job.progress = Math.min(0.999, job.progress + INCREMENT);
@@ -88,6 +101,7 @@ function makeMock() {
           job.status = 'done';
           job.progress = 1;
           job.endedAt = Date.now();
+          job.hasOutput = true;
           job.actual = {
             containerLabel: 'MP4', videoEncoderLabel: 'H.264', audioEncoderLabel: 'AAC',
             width: 1920, height: 1080, fps: 25, durationSec: 142.5,
@@ -156,6 +170,7 @@ function makeMock() {
             job.status = 'done';
             job.progress = 1;
             job.endedAt = Date.now();
+            job.hasOutput = true;
             job.actual = {
               containerLabel: 'MP4', videoEncoderLabel: 'H.264', audioEncoderLabel: 'AAC',
               width: 1920, height: 1080, fps: 25, durationSec: 142.5,

@@ -374,7 +374,8 @@ function registerIpc() {
       if (!Array.isArray(spec.inputs) || !spec.inputs.length || spec.inputs.length > 100) throw new Error('Invalid inputs');
       if (spec.inputs.some((p) => typeof p !== 'string' || !path.isAbsolute(p) || p.includes('\0'))) throw new Error('Invalid input path');
       if (!spec.params || typeof spec.params !== 'object' || Array.isArray(spec.params)) throw new Error('Invalid params');
-      if (spec.outputDir !== undefined && (typeof spec.outputDir !== 'string' || !path.isAbsolute(spec.outputDir) || spec.outputDir.includes('\0'))) throw new Error('Invalid output directory');
+      // null and undefined both mean "unset" (same folder as source).
+      if (spec.outputDir != null && (typeof spec.outputDir !== 'string' || !path.isAbsolute(spec.outputDir) || spec.outputDir.includes('\0'))) throw new Error('Invalid output directory');
       const allProbes = [];
       for (const input of spec.inputs) {
         if (/\.(srt|vtt|ass|ssa|ttml|xml|dfxp)$/i.test(input)) { allProbes.push(null); continue; }
