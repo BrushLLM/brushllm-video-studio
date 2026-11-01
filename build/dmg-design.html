@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* Mockup canvas: 660x420 = the DMG window content area */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 660px; height: 420px; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+    background: #fafaf9;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    user-select: none;
+  }
+  .tint {
+    position: absolute; top: 0; left: 0; right: 0; height: 230px;
+    background: linear-gradient(180deg, rgba(137,60,237,0.06) 0%, rgba(137,60,237,0) 100%);
+  }
+  .title {
+    position: absolute; top: 64px; left: 0; right: 0;
+    text-align: center; font-size: 29px; font-weight: 700;
+    letter-spacing: -0.3px; color: #1a1b25;
+  }
+  .subtitle {
+    position: absolute; top: 109px; left: 0; right: 0;
+    text-align: center; font-size: 14px; font-weight: 500; color: #565870;
+  }
+  .hint {
+    position: absolute; top: 136px; left: 0; right: 0;
+    text-align: center; font-size: 11px; color: #6b6d82;
+  }
+  /* icon slots: Finder will place real icons here */
+  .icon-slot {
+    position: absolute; width: 96px; height: 96px;
+    border-radius: 22px;
+    display: grid; place-items: center;
+  }
+  .icon-slot.app { left: 102px; top: 192px; }
+  .icon-slot.apps { left: 462px; top: 192px; }
+  /* placeholder visuals for the mockup only */
+  .icon-placeholder {
+    width: 96px; height: 96px; border-radius: 22px;
+    display: grid; place-items: center; font-size: 11px; font-weight: 600;
+  }
+  .app-ph { background: linear-gradient(135deg, #893ced 0%, #6e24d6 100%); color: #fff; }
+  .apps-ph { background: #e8e8ed; color: #565870; border: 1px solid rgba(26,27,37,0.08); }
+  .arrow {
+    position: absolute; left: 260px; top: 209px; width: 140px; height: 64px;
+  }
+  .drag-text {
+    position: absolute; left: 170px; top: 310px; width: 320px;
+    text-align: center; font-size: 12px; line-height: 1.5;
+    color: #565870; font-weight: 500;
+  }
+  .finder-label {
+    position: absolute; top: 296px; font-size: 11px; font-weight: 500;
+    color: #1a1b25; text-align: center; width: 150px;
+  }
+  .finder-label.app { left: 75px; }
+  .finder-label.apps { left: 435px; }
+</style>
+</head>
+<body>
+  <div class="tint"></div>
+  <div class="title">BrushLLM Video Studio</div>
+  <div class="subtitle">macOS</div>
+  <div class="hint">Need help? Visit brushllm.com</div>
+
+  <div class="icon-slot app"><div class="icon-placeholder app-ph">App Icon</div></div>
+  <div class="icon-slot apps"><div class="icon-placeholder apps-ph">Applications</div></div>
+
+  <svg class="arrow" viewBox="0 0 140 64" fill="none">
+    <line x1="3" y1="32" x2="117" y2="32" stroke="#893ced" stroke-width="3" stroke-linecap="round"/>
+    <path d="M102 12 L126 32 L102 52" stroke="#893ced" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </svg>
+
+  <div class="finder-label app">BrushLLM Video Studio</div>
+  <div class="finder-label apps">Applications</div>
+  <div class="drag-text">Drag to Applications to continue installing</div>
+</body>
+</html>

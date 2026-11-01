@@ -17,7 +17,7 @@
     "benchmark": "node scripts/benchmark-transcode.mjs",
     "measure": "node scripts/measure-release.mjs",
     "dist": "npm run dist:mac-arm64 && npm run dist:win-x64 && npm run dist:win-arm64",
-    "dist:mac-arm64": "node scripts/stage-binaries.mjs darwin-arm64 && vite build && electron-builder --mac --arm64 --config.directories.output=release/mac-arm64-build",
+    "dist:mac-arm64": "node scripts/stage-binaries.mjs darwin-arm64 && vite build && electron-builder --mac --arm64 --dir --config.directories.output=release/mac-arm64-build && bash scripts/make-dmg.sh \"release/mac-arm64-build/mac-arm64/BrushLLM Video Studio.app\" \"release/mac-arm64-build/BrushLLM Video Studio-$npm_package_version-arm64.dmg\" build/dmg-background.png $npm_package_version",
     "dist:win-x64": "node scripts/stage-binaries.mjs win32-x64 && vite build && electron-builder --win --x64 --config.directories.output=release/win-x64-build",
     "dist:win-arm64": "node scripts/stage-binaries.mjs win32-arm64 && vite build && electron-builder --win --arm64 --config.directories.output=release/win-arm64-build"
   },
