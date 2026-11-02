@@ -3,57 +3,55 @@
 <head>
 <meta charset="utf-8">
 <style>
-  /* Mockup canvas: 660x420 = the DMG window content area */
+  /* DMG background: 660x420 — only text + arrow; icons are real (Finder) */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 660px; height: 420px; overflow: hidden; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
-    background: #fafaf9;
+    background: #ffffff;
     -webkit-font-smoothing: antialiased;
     position: relative;
     user-select: none;
   }
-  .tint {
-    position: absolute; top: 0; left: 0; right: 0; height: 230px;
-    background: linear-gradient(180deg, rgba(137,60,237,0.06) 0%, rgba(137,60,237,0) 100%);
-  }
   .title {
-    position: absolute; top: 64px; left: 0; right: 0;
-    text-align: center; font-size: 29px; font-weight: 700;
-    letter-spacing: -0.3px; color: #1a1b25;
+    position: absolute; top: 72px; left: 0; right: 0;
+    text-align: center; font-size: 32px; font-weight: 700;
+    letter-spacing: -0.4px; color: #1a1b25;
   }
   .subtitle {
-    position: absolute; top: 109px; left: 0; right: 0;
-    text-align: center; font-size: 14px; font-weight: 500; color: #565870;
+    position: absolute; top: 120px; left: 0; right: 0;
+    text-align: center; font-size: 15px; font-weight: 500; color: #8a8ca0;
   }
-  .hint {
-    position: absolute; top: 136px; left: 0; right: 0;
-    text-align: center; font-size: 11px; color: #6b6d82;
-  }
-  /* icon slots: Finder will place real icons here */
-  /* placeholder visuals for the mockup only */
   .arrow {
-    position: absolute; left: 260px; top: 209px; width: 140px; height: 64px;
+    position: absolute; left: 265px; top: 218px; width: 130px; height: 56px;
   }
   .drag-text {
-    position: absolute; left: 170px; top: 310px; width: 320px;
-    text-align: center; font-size: 12px; line-height: 1.5;
+    position: absolute; left: 180px; top: 290px; width: 300px;
+    text-align: center; font-size: 13px; line-height: 1.5;
     color: #565870; font-weight: 500;
+  }
+  .divider {
+    position: absolute; top: 356px; left: 100px; right: 100px; height: 1px;
+    background: rgba(26, 27, 37, 0.08);
+  }
+  .help {
+    position: absolute; top: 376px; left: 0; right: 0;
+    text-align: center; font-size: 11px; color: #8a8ca0;
   }
 </style>
 </head>
 <body>
-  <div class="tint"></div>
   <div class="title">BrushLLM Video Studio</div>
   <div class="subtitle">macOS</div>
-  <div class="hint">Need help? Visit brushllm.com</div>
 
-
-  <svg class="arrow" viewBox="0 0 140 64" fill="none">
-    <line x1="3" y1="32" x2="117" y2="32" stroke="#893ced" stroke-width="3" stroke-linecap="round"/>
-    <path d="M102 12 L126 32 L102 52" stroke="#893ced" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <svg class="arrow" viewBox="0 0 130 56" fill="none">
+    <line x1="4" y1="28" x2="108" y2="28" stroke="#893ced" stroke-width="4" stroke-linecap="round"/>
+    <path d="M94 10 L118 28 L94 46" stroke="#893ced" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   </svg>
 
   <div class="drag-text">Drag to Applications to continue installing</div>
+
+  <div class="divider"></div>
+  <div class="help">Need help? Visit brushllm.com</div>
 </body>
 </html>
