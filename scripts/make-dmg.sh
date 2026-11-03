@@ -72,11 +72,11 @@ end tell
 
 sleep 1
 
-# 3. position icons
+# 3. position icons (matching WeChat reference proportions)
 osascript -e "
 tell application \"Finder\"
-  set position of item \"${APP_NAME}\" of disk \"${VOL_NAME}\" to {150, 240}
-  set position of item \"Applications\" of disk \"${VOL_NAME}\" to {510, 240}
+  set position of item \"${APP_NAME}\" of disk \"${VOL_NAME}\" to {180, 220}
+  set position of item \"Applications\" of disk \"${VOL_NAME}\" to {480, 220}
 end tell
 " 2>&1 || echo "WARN: icon positioning failed"
 
