@@ -4,7 +4,7 @@
 
 # BrushLLM Video Studio
 
-Uma caixa de ferramentas de vídeo local-first — 33 operações de vídeo, áudio e legendas, todas executadas 100% na sua máquina. Grátis, offline, privado.
+Uma caixa de ferramentas de vídeo local-first — 26 operações de vídeo, áudio e legendas, todas executadas 100% na sua máquina. Grátis, offline, privado.
 
 **Ferramentas:** Converter formato · Comprimir · Unir · Recortar · Cortar quadro · Redimensionar · Girar · Velocidade · Quadros · GIF/WebP · Metadados · Trocar contêiner · Converter áudio · Comprimir · Recortar · Volume · Intensidade · Extrair/Substituir áudio · Converter legendas · Deslocar tempo · Corrigir codificação.
 

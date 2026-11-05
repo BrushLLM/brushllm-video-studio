@@ -24,8 +24,18 @@ function editContainer(source = {}) {
   return ['mp4', 'mkv', 'mov'].includes(c) ? c : 'mp4';
 }
 
+function videoCodecForContainer(container, codec) {
+  if (container === 'webm' && !['vp8', 'vp9', 'av1', 'copy'].includes(codec)) return 'vp9';
+  if (container === 'avi' && !['mpeg4', 'copy'].includes(codec)) return 'mpeg4';
+  return codec;
+}
+
 function audioOutputExtension(codec) {
   return AUDIO_CODEC_EXTENSIONS[codec] || '.mka';
+}
+
+function audioProcessingFormat(codec) {
+  return Object.keys(AUDIO_FORMATS).find(format => AUDIO_FORMATS[format].codec === codec) || 'mp3';
 }
 
 function displaySize(video = {}) {
@@ -100,4 +110,4 @@ function inputFilesForOp(files, inputKind) {
 
 
 
-module.exports = { containerOfPath, containerOfSource, editContainer, audioOutputExtension, displaySize, mergeCopyCompatibility, AUDIO_FORMATS, AUDIO_CODEC_EXTENSIONS, fileKindOf, filterForSection, inputFilesForOp, acceptsFor, VIDEO_EXTS, AUDIO_EXTS, SUBTITLE_EXTS };
+module.exports = { containerOfPath, containerOfSource, editContainer, videoCodecForContainer, audioOutputExtension, audioProcessingFormat, displaySize, mergeCopyCompatibility, AUDIO_FORMATS, AUDIO_CODEC_EXTENSIONS, fileKindOf, filterForSection, inputFilesForOp, acceptsFor, VIDEO_EXTS, AUDIO_EXTS, SUBTITLE_EXTS };

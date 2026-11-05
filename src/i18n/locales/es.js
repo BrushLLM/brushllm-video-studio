@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "Mantener frecuencia de origen",
+  "param.sourceChannels": "Mantener canales de origen",
+  "common.preparing": "Preparando…",
+  "common.defaultOutput": "Usar carpeta de salida predeterminada",
+  "plan.compressionLarger": "La salida estimada es mayor que el original. Reduzca la tasa de bits para disminuir el tamaño.",
+  "plan.compressionUncertain": "La compresión puede no reducir el tamaño. Compare el resultado antes de eliminar el original.",
   'nav.video': 'Vídeo',
   'nav.audio': 'Audio',
   'nav.subtitle': 'Subtítulos',

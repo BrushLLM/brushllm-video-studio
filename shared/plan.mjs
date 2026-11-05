@@ -7,6 +7,8 @@
 //   null    -> cannot be reliably estimated (CRF mode)
 
 import { resolveEncoding } from './resolve.mjs';
+import { containerOfSource, containerOfPath, editContainer, mergeCopyCompatibility, audioOutputExtension, audioProcessingFormat } from './media.mjs';
+import contract from './media-contract.json' with { type: 'json' };
 
 const VIDEO_CODEC_LABELS = {
   h264: 'H.264',
@@ -34,6 +36,9 @@ const AUDIO_CODEC_LABELS = {
 };
 
 const CONTAINER_LABELS = { mp4: 'MP4', mkv: 'MKV', webm: 'WebM', mov: 'MOV', avi: 'AVI' };
+const containerLabel = (container) => CONTAINER_LABELS[container] || container?.toUpperCase() || null;
+const editAudioLabel = (source, container) => !source.audio ? null
+  : audioLabel(contract.copyableAudio[container]?.includes(source.audio.codec) ? source.audio.codec : 'aac');
 
 function videoLabel(codec) {
   return VIDEO_CODEC_LABELS[codec] || (codec ? codec.toUpperCase() : null);
@@ -99,16 +104,23 @@ function buildPlan(op, params, source, opts = {}) {
       plan.audioCopy = r.audioCopy;
       plan.containerLabel = CONTAINER_LABELS[r.container] || r.container.toUpperCase();
       plan.videoEncoderLabel = videoLabel(r.videoCodec);
-      plan.audioEncoderLabel = r.audioCodec === 'copy'
+      plan.audioEncoderLabel = !a ? null : r.audioCodec === 'copy'
         ? (audioLabel(a && a.codec) || '—')
         : audioLabel(r.audioCodec);
       if (r.mode === 'bitrate' && r.videoBitrate > 0) {
         plan.qualityLabel = `${r.videoBitrate} kbps`;
-        const audioK = r.audioCopy ? 0 : num(r.audioBitrate, 128);
+        const audioK = r.audioCopy ? num(a?.bitrate, 0) / 1000 : (a ? num(r.audioBitrate, 128) : 0);
         plan.sizeEstimate = estimateFromBitrate(r.videoBitrate, audioK, dur);
+      } else if (r.mode === 'qscale') {
+        plan.qualityLabel = `QScale ${r.qscale}`;
+        plan.sizeNoteKey = 'plan.sizeCRF';
       } else {
         plan.qualityLabel = `CRF ${num(r.crf, op === 'video.compress' ? 26 : 20)}`;
         plan.sizeNoteKey = 'plan.sizeCRF';
+      }
+      if (op === 'video.compress') {
+        plan.warningKey = plan.sizeEstimate != null && srcSize > 0 && plan.sizeEstimate >= srcSize
+          ? 'plan.compressionLarger' : 'plan.compressionUncertain';
       }
       return plan;
     }
@@ -118,10 +130,7 @@ function buildPlan(op, params, source, opts = {}) {
       plan.containerLabel = CONTAINER_LABELS[container] || 'MP4';
       let mode = p.mode || 'auto';
       if (mode === 'auto') {
-        const codecs = (opts.allProbes || []).map(
-          (x) => `${x.video ? x.video.codec : '-'}|${x.audio ? x.audio.codec : '-'}`
-        );
-        mode = codecs.length && codecs.every((c) => c === codecs[0]) ? 'copy' : 'reencode';
+        mode = mergeCopyCompatibility(opts.allProbes || []).compatible ? 'copy' : 'reencode';
       }
       const totalDur = (opts.allProbes || []).length
         ? opts.allProbes.reduce((acc, x) => acc + ((x && x.durationSec) || 0), 0)
@@ -149,7 +158,7 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'video.trim': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || null;
+      plan.containerLabel = containerLabel(p.precise ? editContainer(src) : containerOfSource(src));
       plan.videoEncoderLabel = videoLabel(v && v.codec);
       plan.audioEncoderLabel = audioLabel(a && a.codec);
       const start = num(p.startSec, 0);
@@ -157,6 +166,7 @@ function buildPlan(op, params, source, opts = {}) {
       const outDur = Math.max(0, Math.min(end, dur || end) - start);
       plan.durationSec = outDur || null;
       if (p.precise) {
+        plan.audioEncoderLabel = editAudioLabel(src, editContainer(src));
         plan.videoEncoderLabel = 'H.264';
         plan.qualityLabel = 'CRF 18';
         plan.sizeEstimate = null;
@@ -171,9 +181,9 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'video.crop': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || null;
+      plan.containerLabel = containerLabel(editContainer(src));
       plan.videoEncoderLabel = 'H.264';
-      plan.audioEncoderLabel = audioLabel(a && a.codec);
+      plan.audioEncoderLabel = editAudioLabel(src, editContainer(src));
       plan.qualityLabel = 'CRF 18';
       if (num(p.w, 0) > 0 && num(p.h, 0) > 0) {
         plan.width = num(p.w, 0);
@@ -185,9 +195,9 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'video.scale': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || null;
+      plan.containerLabel = containerLabel(editContainer(src));
       plan.videoEncoderLabel = 'H.264';
-      plan.audioEncoderLabel = audioLabel(a && a.codec);
+      plan.audioEncoderLabel = editAudioLabel(src, editContainer(src));
       plan.qualityLabel = 'CRF 18';
       const sizes = { '1080p': [1920, 1080], '720p': [1280, 720], '480p': [854, 480], '360p': [640, 360] };
       if (p.size && sizes[p.size]) {
@@ -203,9 +213,9 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'video.rotate': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || null;
+      plan.containerLabel = containerLabel(editContainer(src));
       plan.videoEncoderLabel = 'H.264';
-      plan.audioEncoderLabel = audioLabel(a && a.codec);
+      plan.audioEncoderLabel = editAudioLabel(src, editContainer(src));
       plan.qualityLabel = 'CRF 18';
       const angle = num(p.angle, 0);
       if ((angle === 90 || angle === 270) && v) {
@@ -218,9 +228,9 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'video.speed': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || null;
+      plan.containerLabel = containerLabel(editContainer(src));
       plan.videoEncoderLabel = 'H.264';
-      plan.audioEncoderLabel = 'AAC';
+      plan.audioEncoderLabel = a ? 'AAC' : null;
       plan.qualityLabel = 'CRF 18';
       const factor = Math.min(4, Math.max(0.25, num(p.factor, 1)));
       if (dur > 0) plan.durationSec = dur / factor;
@@ -239,7 +249,7 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'video.replaceAudio': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || null;
+      plan.containerLabel = containerLabel(editContainer(src));
       plan.videoEncoderLabel = videoLabel(v && v.codec);
       plan.qualityLabel = 'stream copy';
       plan.audioEncoderLabel = 'AAC';
@@ -251,7 +261,8 @@ function buildPlan(op, params, source, opts = {}) {
     case 'video.extractAudio': {
       const format = p.format || 'copy';
       if (format === 'copy') {
-        plan.containerLabel = 'MKA';
+        const ext = { aac: 'm4a', mp3: 'mp3', flac: 'flac', opus: 'opus', vorbis: 'ogg' }[a?.codec] || 'mka';
+        plan.containerLabel = containerLabel(ext);
         plan.audioEncoderLabel = audioLabel(a && a.codec);
         plan.qualityLabel = 'stream copy';
         plan.sizeEstimate = 'source';
@@ -311,9 +322,9 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'video.burnSubs': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || null;
+      plan.containerLabel = containerLabel(editContainer(src));
       plan.videoEncoderLabel = 'H.264';
-      plan.audioEncoderLabel = audioLabel(a && a.codec);
+      plan.audioEncoderLabel = editAudioLabel(src, editContainer(src));
       plan.qualityLabel = 'CRF 18';
       plan.sizeEstimate = null;
       plan.sizeNoteKey = 'plan.sizeCRF';
@@ -352,9 +363,9 @@ function buildPlan(op, params, source, opts = {}) {
 
     case 'audio.compress': {
       const srcCodec = (a && a.codec) || 'mp3';
-      const exts = { mp3: 'MP3', m4a: 'M4A', flac: 'FLAC', wav: 'WAV', ogg: 'OGG', opus: 'Opus' };
-      plan.containerLabel = exts[srcCodec] || 'MP3';
-      plan.audioEncoderLabel = plan.containerLabel;
+      const format = audioProcessingFormat(srcCodec);
+      plan.containerLabel = containerLabel(format);
+      plan.audioEncoderLabel = audioLabel(contract.audioFormats[format].codec);
       plan.videoEncoderLabel = null;
       plan.width = null;
       plan.height = null;
@@ -365,7 +376,7 @@ function buildPlan(op, params, source, opts = {}) {
     }
 
     case 'audio.trim': {
-      plan.containerLabel = CONTAINER_LABELS[containerOfSource(src)] || audioLabel(a && a.codec);
+      plan.containerLabel = containerLabel(containerOfSource(src) || (a ? audioOutputExtension(a.codec).slice(1) : null));
       plan.audioEncoderLabel = audioLabel(a && a.codec);
       plan.videoEncoderLabel = null;
       plan.width = null;
@@ -384,9 +395,9 @@ function buildPlan(op, params, source, opts = {}) {
     case 'audio.volume':
     case 'audio.loudnorm': {
       const srcCodec = (a && a.codec) || 'mp3';
-      const exts = { mp3: 'MP3', m4a: 'M4A', flac: 'FLAC', wav: 'WAV', ogg: 'OGG', opus: 'Opus' };
-      plan.containerLabel = exts[srcCodec] || 'MP3';
-      plan.audioEncoderLabel = plan.containerLabel;
+      const format = audioProcessingFormat(srcCodec);
+      plan.containerLabel = containerLabel(format);
+      plan.audioEncoderLabel = audioLabel(contract.audioFormats[format].codec);
       plan.videoEncoderLabel = null;
       plan.width = null;
       plan.height = null;
@@ -414,17 +425,6 @@ function buildPlan(op, params, source, opts = {}) {
   }
 }
 
-function containerOfSource(src) {
-  const name = (src && src.formatName) || '';
-  // mp4 files report "mov,mp4,m4a,…" — check mp4 before mov.
-  if (name.includes('webm')) return 'webm';
-  if (name.includes('matroska')) return 'mkv';
-  if (name.includes('avi')) return 'avi';
-  if (name.includes('mp4')) return 'mp4';
-  if (name.includes('mov')) return 'mov';
-  return 'mp4';
-}
-
 // actual layer: normalize a probed output file into the same display shape.
 function buildActual(probeSummary, outputPath) {
   const s = probeSummary || {};
@@ -432,7 +432,8 @@ function buildActual(probeSummary, outputPath) {
   const a = s.audio;
   let containerLabel;
   if (v) {
-    containerLabel = CONTAINER_LABELS[containerOfSource(s)] || null;
+    const container = containerOfPath(outputPath) || containerOfSource(s);
+    containerLabel = CONTAINER_LABELS[container] || container?.toUpperCase() || null;
   } else {
     // Audio-only output: derive the label from the file extension.
     const ext = (String(outputPath || '').match(/\.([^.]+)$/) || [])[1];

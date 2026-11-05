@@ -4,7 +4,7 @@ import { formatDuration, formatSize, formatBitrate } from '../lib/format';
 
 const KIND_ICON = { video: 'video', audio: 'audio', subtitle: 'subtitle' };
 
-export default function FileList({ files, onRemove, onReorder, reorderable }) {
+export default function FileList({ files, onRemove, onReorder, reorderable, onRetry }) {
   const { t } = useI18n();
   if (!files.length) return null;
 
@@ -45,6 +45,9 @@ export default function FileList({ files, onRemove, onReorder, reorderable }) {
             </div>
           </div>
           <div className="file-actions">
+            {f.probeFailed && onRetry && (
+              <button className="icon-btn" title={t('common.retry')} aria-label={`${t('common.retry')} ${f.name}`} onClick={() => onRetry(f.path)}><Icon name="rotate" size={13} /></button>
+            )}
             {reorderable && <>
               <button className="icon-btn" title={t('common.moveUp')} disabled={i === 0} onClick={() => move(i, -1)}><Icon name="up" size={13} /></button>
               <button className="icon-btn" title={t('common.moveDown')} disabled={i === files.length - 1} onClick={() => move(i, 1)}><Icon name="down" size={13} /></button>

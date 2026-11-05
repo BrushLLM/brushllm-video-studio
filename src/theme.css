@@ -350,6 +350,9 @@ textarea {
 
 .page-inner { max-width: 860px; margin: 0 auto; }
 
+.plan-warning { margin: var(--space-3) 0 0; padding: var(--space-3); border-radius: var(--radius-sm); background: var(--warning-tint); color: var(--warning-text); font-size: var(--text-sm); }
+.output-directory { max-width: 100%; overflow-wrap: anywhere; white-space: normal; text-align: left; }
+
 .page-header { margin-bottom: var(--space-6); }
 
 .page-header h1 {

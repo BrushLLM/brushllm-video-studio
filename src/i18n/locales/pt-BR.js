@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "Manter taxa de amostragem original",
+  "param.sourceChannels": "Manter canais originais",
+  "common.preparing": "Preparando…",
+  "common.defaultOutput": "Usar pasta de saída padrão",
+  "plan.compressionLarger": "A saída estimada é maior que o original. Reduza a taxa de bits para diminuir o tamanho.",
+  "plan.compressionUncertain": "A compressão pode não reduzir o tamanho. Compare o resultado antes de excluir o original.",
   'nav.video': 'Vídeo',
   'nav.audio': 'Áudio',
   'nav.subtitle': 'Legendas',

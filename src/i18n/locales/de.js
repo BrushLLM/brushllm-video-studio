@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "Abtastrate der Quelle beibehalten",
+  "param.sourceChannels": "Kanäle der Quelle beibehalten",
+  "common.preparing": "Vorbereitung…",
+  "common.defaultOutput": "Standard-Ausgabeordner verwenden",
+  "plan.compressionLarger": "Die geschätzte Ausgabe ist größer als die Quelle. Verringern Sie die Bitrate, um die Dateigröße zu reduzieren.",
+  "plan.compressionUncertain": "Komprimierung kann die Datei vergrößern. Vergleichen Sie das Ergebnis, bevor Sie die Quelle löschen.",
   'nav.video': 'Video',
   'nav.audio': 'Audio',
   'nav.subtitle': 'Untertitel',

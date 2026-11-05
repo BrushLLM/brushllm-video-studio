@@ -9,6 +9,8 @@ const { outputExtFor } = require('./engine/commands');
 const subs = require('../shared/subtitles');
 const { DEFAULT_SETTINGS, normalizeSettings, validateEngine, saveSettingsFile } = require('./settings');
 const { writeNewFile, replaceWithBackup } = require('./engine/artifacts');
+const { createLimiter } = require('./engine/limit');
+const limitProbes = createLimiter(4);
 
 let mainWindow = null;
 let settings = null;
@@ -34,7 +36,7 @@ async function probeInput(filePath) {
   probeControllers.add(controller);
   try {
     const { ffprobe } = applyBinaries();
-    return await probe(ffprobe, filePath, { signal: controller.signal });
+    return await limitProbes(() => probe(ffprobe, filePath, { signal: controller.signal }));
   } finally { probeControllers.delete(controller); }
 }
 
@@ -130,7 +132,8 @@ const OP_SUFFIX = {
 };
 
 function resolveOutputPath(op, params, inputPath, summary, outputDirOverride) {
-  const baseDir = outputDirOverride || settings.outputDir || path.dirname(inputPath);
+  const baseDir = outputDirOverride === '' ? path.dirname(inputPath)
+    : outputDirOverride || settings.outputDir || path.dirname(inputPath);
   const baseName = path.basename(inputPath, path.extname(inputPath));
   const suffix = OP_SUFFIX[op] || 'out';
 
@@ -204,19 +207,31 @@ function createWindow() {
           const settings = await b.getSettings();
           const info = await b.appInfo();
           const rendered = !!document.querySelector('.sidebar') && !!document.querySelector('.nav');
-          // Run one REAL job through the full IPC + queue + ffmpeg path.
-          const added = await b.addJobs([{ op: 'video.mute', params: {}, inputs: [${JSON.stringify(testVideo)}] }]);
+          // Exercise both output policies through real IPC, queue and FFmpeg.
+          const defaultOutputDir = ${JSON.stringify(path.join(smokeDir, 'global-output'))};
+          await b.setSettings({ outputDir: defaultOutputDir });
+          const added = await b.addJobs([
+            { op: 'video.mute', params: {}, inputs: [${JSON.stringify(testVideo)}], outputDir: '' },
+            { op: 'video.mute', params: {}, inputs: [${JSON.stringify(testVideo)}], outputDir: null }
+          ]);
           const id = added[0].id;
           const deadline = Date.now() + 60000;
           let job = null;
+          let inherited = null;
           while (Date.now() < deadline) {
             const jobs = await b.listJobs();
             job = jobs.find((j) => j.id === id);
-            if (job && ['done', 'error', 'canceled'].includes(job.status)) break;
+            inherited = jobs.find((j) => j.id === added[1].id);
+            if ([job, inherited].every(j => j && ['done', 'error', 'canceled'].includes(j.status))) break;
             await new Promise((res) => setTimeout(res, 250));
           }
+          await b.setSettings({ outputDir: settings.outputDir || '' });
+          const outputPolicyOk = job?.outputPath === ${JSON.stringify(path.join(smokeDir, 'input-muted.mp4'))}
+            && inherited?.outputPath === ${JSON.stringify(path.join(smokeDir, 'global-output', 'input-muted.mp4'))};
           return {
-            ok: rendered && job && job.status === 'done',
+            ok: rendered && job?.status === 'done' && inherited?.status === 'done' && outputPolicyOk,
+            outputPolicyOk,
+            inheritedOutputPath: inherited?.outputPath,
             rendered,
             language: settings.language,
             locale: info.locale,
@@ -229,7 +244,7 @@ function createWindow() {
           };
         })()`);
 
-        const outputOk = r.outputPath ? fs.existsSync(r.outputPath) : false;
+        const outputOk = r.outputPath && r.inheritedOutputPath ? fs.existsSync(r.outputPath) && fs.existsSync(r.inheritedOutputPath) : false;
         const ok = Boolean(r.ok) && outputOk;
         console.log('SMOKE', JSON.stringify({ ...r, outputExists: outputOk, ok }));
         app.exit(ok ? 0 : 1);
@@ -376,8 +391,8 @@ function registerIpc() {
       if (!Array.isArray(spec.inputs) || !spec.inputs.length || spec.inputs.length > 100) throw new Error('Invalid inputs');
       if (spec.inputs.some((p) => typeof p !== 'string' || !path.isAbsolute(p) || p.includes('\0'))) throw new Error('Invalid input path');
       if (!spec.params || typeof spec.params !== 'object' || Array.isArray(spec.params)) throw new Error('Invalid params');
-      // null and undefined both mean "unset" (same folder as source).
-      if (spec.outputDir != null && (typeof spec.outputDir !== 'string' || !path.isAbsolute(spec.outputDir) || spec.outputDir.includes('\0'))) throw new Error('Invalid output directory');
+      // null/undefined inherit settings; an empty string explicitly selects the source folder.
+      if (spec.outputDir != null && (typeof spec.outputDir !== 'string' || (spec.outputDir !== '' && !path.isAbsolute(spec.outputDir)) || spec.outputDir.includes('\0'))) throw new Error('Invalid output directory');
       const allProbes = [];
       for (const input of spec.inputs) {
         if (/\.(srt|vtt|ass|ssa|ttml|xml|dfxp)$/i.test(input)) { allProbes.push(null); continue; }

@@ -17,21 +17,29 @@ import { Icon } from './icons';
 
 const SECTION_DROP_KIND = { video: 'media', audio: 'audio', subtitle: 'mediaAndSubs' };
 
-export default function ToolPage({ section, files, setFiles, onTransfer, gpuEncoders }) {
+export default function ToolPage({ section, files, setFiles, onTransfer, gpuEncoders, defaultOutputDir = '', drafts = {} }) {
   const { t } = useI18n();
   const ops = useMemo(() => opsForSection(section), [section]);
-  const [selectedOp, setSelectedOp] = useState(null);
-  const [params, setParams] = useState({});
-  const [extras, setExtras] = useState({});
-  const [sourceCharset, setSourceCharset] = useState('auto');
-  const [outputDir, setOutputDir] = useState(null);
+  const [selectedOp, setSelectedOp] = useState(() => drafts[section]?.selectedOp || null);
+  const [params, setParams] = useState(() => drafts[section]?.params || {});
+  const [extras, setExtras] = useState(() => drafts[section]?.extras || {});
+  const [sourceCharset, setSourceCharset] = useState(() => drafts[section]?.sourceCharset || 'auto');
+  const [outputDir, setOutputDir] = useState(() => drafts[section]?.outputDir ?? null);
   const [instantBusy, setInstantBusy] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submission = useRef(false);
   const [toast, setToast] = useState(null);
   const [metaFile, setMetaFile] = useState(null);
   const toastTimer = useRef(null);
   const configRef = useRef(null);
 
+  useEffect(() => {
+    drafts[section] = { selectedOp, params, extras, sourceCharset, outputDir };
+  }, [section, drafts, selectedOp, params, extras, sourceCharset, outputDir]);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
   const op = ops.find((o) => o.id === selectedOp) || null;
+  const effectiveOutputDir = outputDir ?? defaultOutputDir;
 
   const showToast = (msg, kind = 'success') => {
     setToast({ msg, kind });
@@ -113,6 +121,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
   const resolved = useMemo(() => {
     if (!op || op.instant || op.modal) return null;
     const p = engineParams(op.id, params, mainInputs);
+    if (op.extraInput === 'subtitle') p.sourceCharset = sourceCharset;
     for (const k of ['startSec', 'endSec', 'timeSec']) {
       if (typeof p[k] === 'string') p[k] = parseTimeInput(p[k]);
     }
@@ -120,7 +129,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
     const engineOp = op.mapsTo || op.id;
     const validationResult = validateOperation(engineOp, p, mainInputs[0]?.probe);
     return { engineOp, params: p, validationResult };
-  }, [op, params, mainInputs]);
+  }, [op, params, mainInputs, sourceCharset]);
 
   const plan = useMemo(() => {
     if (!resolved || !mainInputs.length) return null;
@@ -200,11 +209,14 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
   };
 
   const submit = async () => {
-    if (!op || !validation.ok) return;
+    if (!op || !validation.ok || submission.current) return;
     if (op.instant) {
-      await runInstant();
+      submission.current = true;
+      try { await runInstant(); } finally { submission.current = false; }
       return;
     }
+    submission.current = true;
+    setSubmitting(true);
     const extraPaths = op.extraInput ? (extras[op.extraInput] || []) : [];
     const specs = [];
     if (resolved.engineOp === 'video.merge') {
@@ -227,6 +239,9 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
       showToast(t('msg.jobsAdded', { n: added.length }));
     } catch (e) {
       showToast(String(e.message || e), 'error');
+    } finally {
+      submission.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -266,6 +281,8 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
       <FileList
         files={files}
         onRemove={(path) => setFiles((prev) => prev.filter((f) => f.path !== path))}
+        onRetry={(path) => setFiles((prev) => prev.map((f) => f.path === path
+          ? { ...f, probeFailed: false, probing: false, requestToken: Date.now() + Math.random() } : f))}
         onReorder={op?.reorderable ? (next) => setFiles(next) : null}
         reorderable={Boolean(op?.reorderable)}
       />
@@ -287,7 +304,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
             />
           )}
 
-          {op.instant && (op.id === 'subtitle.convert' || op.id === 'subtitle.shift' || op.id === 'subtitle.reencode') && (
+          {(op.instant || op.extraInput === 'subtitle') && (
             <div className="card param-panel">
               <div className="param-grid">
                 <div className="param-field">
@@ -317,12 +334,12 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
           <div className="action-bar">
             <button
               className={`btn ${op.instant ? 'btn-instant' : 'btn-primary'}`}
-              disabled={!validation.ok || instantBusy}
+              disabled={!validation.ok || instantBusy || submitting}
               title={validation.reason || undefined}
               onClick={submit}
             >
               <Icon name={op.instant ? 'bolt' : 'play'} size={13} />
-              {op.instant
+              {submitting ? t('common.preparing') : op.instant
                 ? (instantBusy ? t('common.processing') : t('common.runNow'))
                 : mainInputs.length > 1 && op.batch
                   ? t('common.addNToQueue', { n: mainInputs.length })
@@ -333,15 +350,22 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
             )}
             {!op.instant && (
               <button
-                className="btn btn-ghost"
+                className="btn btn-ghost output-directory"
+                title={effectiveOutputDir || t('common.sameFolder')}
                 onClick={async () => {
                   const dir = await bridge.pickDirectory();
                   if (dir) setOutputDir(dir);
                 }}
               >
                 <Icon name="folder" size={13} />
-                {outputDir ? outputDir.split(/[/\\]/).pop() : t('common.sameFolder')}
+                {effectiveOutputDir || t('common.sameFolder')}
               </button>
+            )}
+            {!op.instant && effectiveOutputDir && (
+              <button className="btn btn-plain" onClick={() => setOutputDir('')}>{t('common.sameFolder')}</button>
+            )}
+            {!op.instant && outputDir != null && (
+              <button className="btn btn-plain" onClick={() => setOutputDir(null)}>{t('common.defaultOutput')}</button>
             )}
           </div>
         </div>

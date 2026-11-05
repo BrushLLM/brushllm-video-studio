@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "원본 샘플 레이트 유지",
+  "param.sourceChannels": "원본 채널 유지",
+  "common.preparing": "준비 중…",
+  "common.defaultOutput": "기본 출력 폴더 사용",
+  "plan.compressionLarger": "예상 출력 크기가 원본보다 큽니다. 비트레이트를 낮춰 크기를 줄이세요.",
+  "plan.compressionUncertain": "압축해도 크기가 줄어들지 않을 수 있습니다. 원본을 삭제하기 전에 결과를 비교하세요.",
   'nav.video': '비디오',
   'nav.audio': '오디오',
   'nav.subtitle': '자막',

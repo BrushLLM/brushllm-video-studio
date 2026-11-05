@@ -84,6 +84,7 @@ export function PlanSummary({ plan, source, fileName }) {
           )}
         </div>
       </div>
+      {plan.warningKey && <p className="plan-warning" role="status">{t(plan.warningKey)}</p>}
     </div>
   );
 }

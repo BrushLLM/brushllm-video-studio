@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "元のサンプルレートを維持",
+  "param.sourceChannels": "元のチャンネル数を維持",
+  "common.preparing": "準備中…",
+  "common.defaultOutput": "既定の出力フォルダーを使用",
+  "plan.compressionLarger": "推定出力サイズが元ファイルより大きくなっています。ビットレートを下げてください。",
+  "plan.compressionUncertain": "圧縮してもサイズが小さくなるとは限りません。元ファイルを削除する前に結果を比較してください。",
   'nav.video': '動画',
   'nav.audio': 'オーディオ',
   'nav.subtitle': '字幕',

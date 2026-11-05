@@ -4,7 +4,7 @@
 
 # BrushLLM Video Studio
 
-Una caja de herramientas de vídeo local-first — 33 operaciones de vídeo, audio y subtítulos, todas se ejecutan 100% en tu equipo. Gratis, sin conexión, privado.
+Una caja de herramientas de vídeo local-first — 26 operaciones de vídeo, audio y subtítulos, todas se ejecutan 100% en tu equipo. Gratis, sin conexión, privado.
 
 **Herramientas:** Convertir formato · Comprimir · Unir · Recortar · Recortar encuadre · Redimensionar · Rotar · Velocidad · Fotogramas · GIF/WebP · Metadatos · Cambiar contenedor · Convertir audio · Comprimir · Recortar · Volumen · Sonoridad · Extraer/Reemplazar audio · Convertir subtítulos · Desplazar · Codificación.
 

@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "沿用源采样率",
+  "param.sourceChannels": "沿用源声道",
+  "common.preparing": "正在准备…",
+  "common.defaultOutput": "使用默认输出目录",
+  "plan.compressionLarger": "预估输出比原文件更大。请降低码率以缩小体积。",
+  "plan.compressionUncertain": "压缩不保证文件变小。请比较结果后再决定是否删除原文件。",
   'nav.video': '视频',
   'nav.audio': '音频',
   'nav.subtitle': '字幕',

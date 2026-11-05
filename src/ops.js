@@ -155,8 +155,8 @@ export const OPS = [
     params: [
       { key: 'format', type: 'select', options: ['mp3', 'm4a', 'flac', 'wav', 'ogg', 'opus'], default: 'mp3' },
       { key: 'bitrate', type: 'select', options: BITRATES, default: '192', showIf: (p) => !['flac', 'wav'].includes(p.format) },
-      { key: 'sampleRate', type: 'select', options: ['0', '44100', '48000'], default: '0', optionLabelKeys: { 0: 'param.original' } },
-      { key: 'channels', type: 'select', options: ['0', '1', '2'], default: '0', optionLabelKeys: { 0: 'param.original' } }
+      { key: 'sampleRate', type: 'select', options: ['0', '44100', '48000'], default: '0', optionLabelKeys: { 0: 'param.sourceSampleRate' } },
+      { key: 'channels', type: 'select', options: ['0', '1', '2'], default: '0', optionLabelKeys: { 0: 'param.sourceChannels' } }
     ]
   },
   {
@@ -321,6 +321,8 @@ export function engineParams(opId, params, files) {
   for (const k of ['audioBitrate', 'bitrate', 'videoBitrate', 'sampleRate', 'channels', 'colors', 'fps', 'fontSize', 'margin', 'width', 'height', 'w', 'h', 'x', 'y', 'crf']) {
     if (p[k] != null && p[k] !== '' && !isNaN(Number(p[k]))) p[k] = Number(p[k]);
   }
+  // The UI's zero option means no override, not a zero-Hz/zero-channel request.
+  for (const k of ['sampleRate', 'channels']) if (p[k] === 0) delete p[k];
   if (p.languages == null && p.language) p.languages = [p.language];
   return p;
 }

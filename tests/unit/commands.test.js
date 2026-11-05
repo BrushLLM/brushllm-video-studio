@@ -264,13 +264,15 @@ test('bitrate mode uses kbps numbers with the k suffix', () => {
   assert.ok(!args.includes('-crf'));
 });
 
-test('AVI container forces MPEG-4 video; copy/opus audio becomes MP3', () => {
+test('AVI container forces MPEG-4 video and preserves compatible copied audio', () => {
   const args = argsOf('video.convert', { container: 'avi', videoCodec: 'h264', audioCodec: 'aac', crf: 20 });
   assert.equal(args[args.indexOf('-c:v') + 1], 'mpeg4');
-  // AAC is legal in AVI and stays; stream copy / Opus are not and become MP3.
+  // AAC is legal in AVI, including when it is copied from the source.
   assert.equal(args[args.indexOf('-c:a') + 1], 'aac');
   const forced = argsOf('video.convert', { container: 'avi', videoCodec: 'h264', audioCodec: 'copy' });
-  assert.equal(forced[forced.indexOf('-c:a') + 1], 'libmp3lame');
+  assert.equal(forced[forced.indexOf('-c:a') + 1], 'copy');
+  const opus = argsOf('video.convert', { container: 'avi', videoCodec: 'h264', audioCodec: 'opus' });
+  assert.equal(opus[opus.indexOf('-c:a') + 1], 'libmp3lame');
 });
 
 test('GPU VideoToolbox encoder is passed through with bitrate control', () => {

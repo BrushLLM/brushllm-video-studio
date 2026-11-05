@@ -1,4 +1,4 @@
-const { spawn, spawnSync } = require('node:child_process');
+const { spawn, spawnSync, execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
@@ -325,6 +325,10 @@ class JobManager extends EventEmitter {
     if (job.op.startsWith('audio.') || job.op === 'video.extractAudio') {
       if (!actual.audio) throw new Error('Output contains no audio stream');
     } else if (job.op !== 'video.anim' && !actual.video) throw new Error('Output contains no video stream');
+    if (job.requestedSpec.requestedParams && ['video.convert', 'video.compress'].includes(job.op) && job.params.videoCodec) {
+      const codec = job.params.videoCodec === 'copy' ? ctx.probe.video?.codec : job.params.videoCodec.split('_')[0];
+      if (actual.video?.codec !== codec) throw new Error(`Output video codec ${actual.video?.codec} does not match requested ${codec}`);
+    }
     if (job.op === 'video.merge' && job.expectedDuration > 0) {
       const tolerance = Math.max(0.5, job.expectedDuration * 0.03);
       if (Math.abs(actual.durationSec - job.expectedDuration) > tolerance) throw new Error('Merged output duration does not match its inputs');
@@ -356,37 +360,27 @@ class JobManager extends EventEmitter {
         if (Number.isFinite(speed)) job.speed = speed;
         this._emit(job);
       };
+      let cpuSample = null;
       const cpuSampler = setInterval(() => {
-        if (job.status !== 'running' || !child.pid) return;
-        // lastSampleAt marks the END of the previous sample; a sample that
-        // starts sooner than one interval later is a callback that piled up
-        // while spawnSync blocked the loop — skip it.
-        const interval = IS_WIN ? WIN_CPU_INTERVAL_MS : 600;
-        if (Date.now() - lastSampleAt < interval) return;
-        try {
-          if (IS_WIN) {
-            // (Get-Process).CPU = cumulative processor seconds; diff between
-            // samples gives the utilization (can exceed 100% on many cores,
-            // matching what `ps pcpu` reports on macOS).
-            const r = spawnSync('powershell.exe',
-              ['-NoProfile', '-Command', `(Get-Process -Id ${child.pid}).CPU`],
-              { encoding: 'utf8', timeout: 3000 });
-            const cpuSec = parseFloat(r.stdout);
-            if (Number.isFinite(cpuSec)) {
-              if (lastCpuSec != null && lastSampleAt > 0) {
-                const elapsed = Math.max(0.5, (Date.now() - lastSampleAt) / 1000);
-                const pct = Math.round(((cpuSec - lastCpuSec) / elapsed) * 100);
-                if (pct >= 0) { job.cpuPercent = pct; this._emit(job); }
-              }
-              lastCpuSec = cpuSec;
-            }
-          } else {
-            const result = spawnSync('ps', ['-o', 'pcpu=', '-p', String(child.pid)], { encoding: 'utf8', timeout: 1000 });
-            const pct = parseFloat(result.stdout);
-            if (Number.isFinite(pct)) { job.cpuPercent = Math.round(pct); this._emit(job); }
-          }
-        } catch { /* CPU sampling is optional. */ }
-        lastSampleAt = Date.now();
+        if (job.status !== 'running' || !child.pid || cpuSample) return;
+        const command = IS_WIN ? 'powershell.exe' : 'ps';
+        const args = IS_WIN
+          ? ['-NoProfile', '-Command', `(Get-Process -Id ${child.pid}).CPU.ToString([System.Globalization.CultureInfo]::InvariantCulture)`]
+          : ['-o', 'pcpu=', '-p', String(child.pid)];
+        // Sampling must never block the main process or overlap slow samples.
+        cpuSample = execFile(command, args, { encoding: 'utf8', timeout: IS_WIN ? 3000 : 1000, windowsHide: true }, (error, stdout) => {
+          cpuSample = null;
+          if (error || signal.aborted || job.status !== 'running' || job.attempt !== attempt) return;
+          const value = parseFloat(stdout);
+          if (!Number.isFinite(value)) return;
+          const now = Date.now();
+          const percent = IS_WIN
+            ? (lastCpuSec == null ? null : (value - lastCpuSec) / Math.max(0.5, (now - lastSampleAt) / 1000) * 100)
+            : value;
+          lastCpuSec = value;
+          lastSampleAt = now;
+          if (percent != null && percent >= 0) { job.cpuPercent = Math.round(percent); this._emit(job); }
+        });
       }, IS_WIN ? WIN_CPU_INTERVAL_MS : 600);
       child.stdout.on('data', (data) => {
         stdoutBuf += data;
@@ -411,6 +405,7 @@ class JobManager extends EventEmitter {
       child.on('close', (code) => {
         signal.removeEventListener('abort', abort);
         if (cpuSampler) clearInterval(cpuSampler);
+        cpuSample?.kill();
         if (this._children.get(job.id) === child) this._children.delete(job.id);
         if (attempt.child === child) attempt.child = null;
         if (signal.aborted) return reject(canceledError());

@@ -4,7 +4,7 @@
 
 # BrushLLM Video Studio
 
-Une boîte à outils vidéo local-first — 33 opérations vidéo, audio et sous-titres, toutes exécutées 100% sur votre machine. Gratuit, hors ligne, privé.
+Une boîte à outils vidéo local-first — 26 opérations vidéo, audio et sous-titres, toutes exécutées 100% sur votre machine. Gratuit, hors ligne, privé.
 
 **Outils :** Convertir le format · Compresser · Fusionner · Découper · Rogner · Redimensionner · Pivoter · Vitesse · Images · GIF/WebP · Métadonnées · Changer de conteneur · Convertir l'audio · Compresser · Découper · Volume · Sonie · Extraire/Remplacer l'audio · Convertir les sous-titres · Décaler · Encodage.
 

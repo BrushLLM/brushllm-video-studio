@@ -1,7 +1,7 @@
 // Effective encoding for filterless transcodes ONLY. Other operations own their
 // stream mappings and mode semantics (merge/scale modes are not rate control).
 import contract from './media-contract.json' with { type: 'json' };
-import { containerOfSource } from './media.mjs';
+import { containerOfSource, videoCodecForContainer } from './media.mjs';
 import { validateOperation } from './validation.mjs';
 
 export const SUPPORTED_GPU_ENCODERS = Object.freeze([...contract.gpuEncoders]);
@@ -17,14 +17,22 @@ const tiers = { compat: 6000, balanced: 5000, quality: 8000, small: 3500 };
 const num = (value, fallback) => value == null || value === '' || !Number.isFinite(Number(value)) ? fallback : Number(value);
 
 export function containerForcedVideo(container, codec) {
-  if (container === 'webm') return ['vp8', 'vp9', 'av1'].includes(codec) ? codec : 'vp9';
-  if (container === 'avi' && !['mpeg4', 'copy'].includes(codec)) return 'mpeg4';
-  return codec;
+  return videoCodecForContainer(container, codec);
 }
 
 export function defaultGpuBitrate(preset, source) {
   const scale = num(source?.video?.width, 1920) * num(source?.video?.height, 1080) / (1920 * 1080);
   return Math.round(Math.min(60000, Math.max(1500, (tiers[preset] || tiers.balanced) * Math.max(0.25, scale))));
+}
+
+export function compressionGpuBitrate(preset, source) {
+  const defaultKbps = defaultGpuBitrate(preset, source);
+  const totalBps = num(source?.bitrate, num(source?.size, 0) * 8 / num(source?.durationSec, 0));
+  const audioBps = source?.audio ? num(source.audio.bitrate, 0) : 0;
+  const videoBps = num(source?.video?.bitrate, totalBps - audioBps);
+  return videoBps > 0
+    ? Math.min(defaultKbps, Math.max(100, Math.floor(videoBps / 1000 * 0.8)))
+    : defaultKbps;
 }
 
 export function mpeg4Quality(crf) {
@@ -76,7 +84,9 @@ export function resolveEncoding(op, params, source, opts = {}) {
   let qscale = null;
   if (hw) {
     mode = 'bitrate';
-    if (!(videoBitrate > 0)) videoBitrate = defaultGpuBitrate(p.qualityPreset, source);
+    if (!(videoBitrate > 0)) videoBitrate = op === 'video.compress'
+      ? compressionGpuBitrate(p.qualityPreset, source)
+      : defaultGpuBitrate(p.qualityPreset, source);
     crf = null;
   } else if (mode === 'bitrate') crf = null;
   else {

@@ -521,3 +521,49 @@ test('SUMMARY: all regression tests reflect approved semantics', () => {
   
   assert.ok(true, 'regression suite complete');
 });
+
+test('UI audio defaults produce a real output without overriding the source rate/channels', async () => {
+  const { OPS, defaultParams, engineParams } = await import('../../src/ops.js');
+  const { assertValidOperation } = await import('../../shared/validation.mjs');
+  const input = fixtures.makeOggAudio('ui-default-audio.ogg');
+  const op = OPS.find(o => o.id === 'audio.convert');
+  const params = engineParams(op.id, defaultParams(op), []);
+  assertValidOperation(op.id, params);
+  const before = (await probeFile(input)).streams.find(s => s.codec_type === 'audio');
+  const job = await runJob({ op: op.id, params, inputs: [input], outputPath: fixtures.path('ui-default-audio.mp3') });
+  const after = (await probeFile(job.outputPath)).streams.find(s => s.codec_type === 'audio');
+  assert.equal(after.codec_name, 'mp3');
+  assert.equal(after.sample_rate, before.sample_rate);
+  assert.equal(after.channels, before.channels);
+});
+
+test('WebM AV1 request produces AV1 and retains an AV1 plan', async () => {
+  const input = fixtures.makeBasicVideo('webm-av1-input.mp4');
+  const params = { container: 'webm', videoCodec: 'av1', crf: 35, encodeSpeed: 'fast', audioCodec: 'auto', hwStrategy: 'cpu' };
+  const job = await runJob({ op: 'video.convert', params, requestedParams: params, gpuEncoders: [], inputs: [input], outputPath: fixtures.path('requested-av1.webm') });
+  const raw = await probeFile(job.outputPath);
+  assert.equal(raw.streams.find(s => s.codec_type === 'video').codec_name, 'av1');
+  assert.equal(job.plan.videoEncoderLabel, 'AV1');
+  assert.equal(job.actual.videoEncoderLabel, 'AV1');
+});
+
+test('GBK subtitles can be embedded with an explicit source encoding', async () => {
+  const input = fixtures.makeBasicVideo('gbk-input.mp4');
+  const subtitle = fixtures.path('gbk-input.srt');
+  fs.writeFileSync(subtitle, Buffer.concat([
+    Buffer.from('1\n00:00:00,000 --> 00:00:02,000\n'),
+    Buffer.from([0xd6, 0xd0, 0xce, 0xc4]), Buffer.from('\n')
+  ]));
+  const job = await runJob({ op: 'video.embedSubs', params: { container: 'mkv', sourceCharset: 'gbk' }, inputs: [input, subtitle], outputPath: fixtures.path('gbk-embedded.mkv') });
+  const raw = await probeFile(job.outputPath);
+  assert.ok(raw.streams.some(s => s.codec_type === 'subtitle'));
+});
+
+test('AAC volume processing reserves the same output format that the encoder produces', async () => {
+  const input = fixtures.makeBasicVideo('aac-volume-input.mp4');
+  const job = await runJob({ op: 'audio.volume', params: { db: 1 }, inputs: [input], outputPath: fixtures.path('aac-volume.m4a') });
+  assert.match(job.outputPath, /\.m4a$/);
+  const raw = await probeFile(job.outputPath);
+  assert.equal(raw.streams.find(s => s.codec_type === 'audio').codec_name, 'aac');
+  assert.equal(job.plan.containerLabel, 'M4A');
+});

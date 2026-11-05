@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "沿用來源取樣率",
+  "param.sourceChannels": "沿用來源聲道",
+  "common.preparing": "正在準備…",
+  "common.defaultOutput": "使用預設輸出資料夾",
+  "plan.compressionLarger": "預估輸出比原檔案更大。請降低位元率以縮小體積。",
+  "plan.compressionUncertain": "壓縮不保證檔案變小。請比較結果後再決定是否刪除原檔案。",
   'nav.video': '影片',
   'nav.audio': '音訊',
   'nav.subtitle': '字幕',

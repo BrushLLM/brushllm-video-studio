@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { I18nProvider, useI18n } from './i18n';
 import { bridge } from './lib/bridge';
 import { filterForSection } from '../shared/media.mjs';
@@ -20,6 +20,7 @@ const NAV = [
 // Shell lives INSIDE the I18nProvider so useI18n works.
 function Shell({ settings, setSettings, jobs, setJobs, page, setPage, filesBySection, setSectionFiles, transfer, gpuEncoders, platform }) {
   const { t } = useI18n();
+  const toolDrafts = useRef({});
   // Same definition as QueuePage's pending count — paused jobs are still in flight.
   const pending = jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status)).length;
   const failed = jobs.filter((j) => j.status === 'error').length;
@@ -60,31 +61,16 @@ function Shell({ settings, setSettings, jobs, setJobs, page, setPage, filesBySec
         </div>
       </aside>
       <main className="content">
-        {page === 'video' && (
+        {['video', 'audio', 'subtitle'].includes(page) && (
           <ToolPage
-            section="video"
-            files={filesBySection.video}
-            setFiles={(updater) => setSectionFiles('video', updater)}
+            key={page}
+            section={page}
+            files={filesBySection[page]}
+            setFiles={(updater) => setSectionFiles(page, updater)}
             onTransfer={transfer}
             gpuEncoders={gpuEncoders}
-          />
-        )}
-        {page === 'audio' && (
-          <ToolPage
-            section="audio"
-            files={filesBySection.audio}
-            setFiles={(updater) => setSectionFiles('audio', updater)}
-            onTransfer={transfer}
-            gpuEncoders={gpuEncoders}
-          />
-        )}
-        {page === 'subtitle' && (
-          <ToolPage
-            section="subtitle"
-            files={filesBySection.subtitle}
-            setFiles={(updater) => setSectionFiles('subtitle', updater)}
-            onTransfer={transfer}
-            gpuEncoders={gpuEncoders}
+            defaultOutputDir={settings.outputDir || ''}
+            drafts={toolDrafts.current}
           />
         )}
         {page === 'queue' && <QueuePage jobs={jobs} setJobs={setJobs} platform={platform} onNavigate={setPage} />}
@@ -128,7 +114,8 @@ export default function App() {
         return next;
       });
     });
-    return off;
+    const offRemoved = bridge.onJobsRemoved((id) => setJobs((prev) => prev.filter((job) => job.id !== id)));
+    return () => { off(); offRemoved(); };
   }, []);
 
   // Mouse side buttons: XButton1 (button 3) = back, XButton2 (button 4) = forward.

@@ -24,21 +24,7 @@ export default function QueuePage({ jobs, setJobs, platform = 'darwin', onNaviga
   const [canPause, setCanPause] = useState(false);
 
   useEffect(() => {
-    bridge.listJobs().then(setJobs);
     bridge.canPauseJobs?.().then((v) => setCanPause(Boolean(v))).catch(() => setCanPause(false));
-    const off1 = bridge.onJobsUpdated((job) => {
-      setJobs((prev) => {
-        const idx = prev.findIndex((j) => j.id === job.id);
-        if (idx === -1) return [...prev, job];
-        const next = [...prev];
-        next[idx] = job;
-        return next;
-      });
-    });
-    const off2 = bridge.onJobsRemoved((id) => {
-      setJobs((prev) => prev.filter((j) => j.id !== id));
-    });
-    return () => { off1(); off2(); };
   }, []);
 
   const showToast = (msg, kind = 'error') => {

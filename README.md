@@ -15,7 +15,7 @@
   <strong><a href="https://www.brushllm.com">🌐 brushllm.com</a></strong> · <a href="https://github.com/BrushLLM/brushllm-video-studio/releases">Releases</a>
 </p>
 
-<p align="center">A local-first desktop video toolbox — 33 operations across video, audio and subtitles, all running 100% on your device. Free, offline, private.</p>
+<p align="center">A local-first desktop video toolbox — 26 operations across video, audio and subtitles, all running 100% on your device. Free, offline, private.</p>
 
 <p align="center">
   <img src=".github/assets/screenshot.png" width="800" alt="BrushLLM Video Studio">

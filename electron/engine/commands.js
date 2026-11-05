@@ -19,7 +19,7 @@ function useBitrate(codec, p) {
 }
 
 const contract = require('../../shared/media-contract.json');
-const { mergeCopyCompatibility } = require('../../shared/media.cjs');
+const { mergeCopyCompatibility, videoCodecForContainer, audioProcessingFormat } = require('../../shared/media.cjs');
 const VIDEO_ENCODERS = contract.videoEncoders;
 const GPU_ENCODERS = new Set(contract.gpuEncoders);
 
@@ -186,15 +186,11 @@ const builders = {
       // Defense only — production resolves 'auto' in main.js via resolve.mjs.
       aCodec = { webm: 'opus', avi: 'mp3' }[container] || 'aac';
     }
-    if (container === 'webm') {
-      vCodec = 'vp9';
+    vCodec = videoCodecForContainer(container, vCodec);
+    if (container === 'webm' || container === 'avi') {
       const srcAudio = ctx && ctx.probe && ctx.probe.audio && ctx.probe.audio.codec;
-      aCodec = aCodec === 'copy' && ['opus', 'vorbis'].includes(srcAudio) ? 'copy' : 'opus';
-    }
-    if (container === 'avi') {
-      const base = String(vCodec).split('_')[0];
-      if (['h264', 'hevc', 'av1'].includes(base)) vCodec = 'mpeg4';
-      if (aCodec === 'copy' || aCodec === 'opus') aCodec = 'mp3';
+      const canonical = aCodec === 'copy' ? srcAudio : (AUDIO_FORMATS[aCodec]?.codec || aCodec);
+      if (!REENCODE_COPYABLE_AUDIO[container].includes(canonical)) aCodec = container === 'webm' ? 'opus' : 'mp3';
     }
     const args = [
       '-hide_banner', '-y',
@@ -592,7 +588,7 @@ const builders = {
 
   'audio.compress'(p, inputs, out, ctx) {
     const src = (ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || 'mp3';
-    const format = AUDIO_FORMATS[src] ? src : 'mp3';
+    const format = audioProcessingFormat(src);
     const f = AUDIO_FORMATS[format];
     out = out.replace(/\.[^.]+$/, f.ext);
     const args = [
@@ -616,7 +612,7 @@ const builders = {
 
   'audio.volume'(p, inputs, out, ctx) {
     const src = (ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || 'mp3';
-    const format = AUDIO_FORMATS[src] ? src : 'mp3';
+    const format = audioProcessingFormat(src);
     const f = AUDIO_FORMATS[format];
     out = out.replace(/\.[^.]+$/, f.ext);
     const args = [
@@ -632,7 +628,7 @@ const builders = {
 
   'audio.loudnorm'(p, inputs, out, ctx) {
     const src = (ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || 'mp3';
-    const format = AUDIO_FORMATS[src] ? src : 'mp3';
+    const format = audioProcessingFormat(src);
     const f = AUDIO_FORMATS[format];
     out = out.replace(/\.[^.]+$/, f.ext);
     const args = [
@@ -741,6 +737,10 @@ function outputExtFor(op, params, inputPath, ctx) {
       return (AUDIO_FORMATS[params.format] || { ext: '.mp3' }).ext;
     case 'audio.convert':
       return (AUDIO_FORMATS[params.format] || { ext: '.mp3' }).ext;
+    case 'audio.compress':
+    case 'audio.volume':
+    case 'audio.loudnorm':
+      return AUDIO_FORMATS[audioProcessingFormat(ctx?.probe?.audio?.codec)].ext;
     case 'subtitle.extract':
       return `.${params.format || 'srt'}`;
     default: {

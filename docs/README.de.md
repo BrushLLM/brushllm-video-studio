@@ -4,7 +4,7 @@
 
 # BrushLLM Video Studio
 
-Ein lokal-first Desktop-Werkzeugkasten für Video — 33 Operationen für Video, Audio und Untertitel, alle laufen 100% auf deinem Gerät. Kostenlos, offline, privat.
+Ein lokal-first Desktop-Werkzeugkasten für Video — 26 Operationen für Video, Audio und Untertitel, alle laufen 100% auf deinem Gerät. Kostenlos, offline, privat.
 
 **Werkzeuge:** Format konvertieren · Komprimieren · Zusammenfügen · Schneiden · Rogneren · Skalieren · Drehen · Geschwindigkeit · Einzelbilder · GIF/WebP · Metadaten · Container wechseln · Audio konvertieren · Komprimieren · Schneiden · Lautstärke · Loudness · Audio extrahieren/ersetzen · Untertitel konvertieren · Verschieben · Kodierung.
 

@@ -23,8 +23,18 @@ export function editContainer(source = {}) {
   return ['mp4', 'mkv', 'mov'].includes(c) ? c : 'mp4';
 }
 
+export function videoCodecForContainer(container, codec) {
+  if (container === 'webm' && !['vp8', 'vp9', 'av1', 'copy'].includes(codec)) return 'vp9';
+  if (container === 'avi' && !['mpeg4', 'copy'].includes(codec)) return 'mpeg4';
+  return codec;
+}
+
 export function audioOutputExtension(codec) {
   return AUDIO_CODEC_EXTENSIONS[codec] || '.mka';
+}
+
+export function audioProcessingFormat(codec) {
+  return Object.keys(AUDIO_FORMATS).find(format => AUDIO_FORMATS[format].codec === codec) || 'mp3';
 }
 
 export function displaySize(video = {}) {

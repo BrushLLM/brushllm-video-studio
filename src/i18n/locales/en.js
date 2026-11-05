@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "Keep source sample rate",
+  "param.sourceChannels": "Keep source channels",
+  "common.preparing": "Preparing…",
+  "common.defaultOutput": "Use default output folder",
+  "plan.compressionLarger": "The estimated output is larger than the source. Lower the bitrate to reduce file size.",
+  "plan.compressionUncertain": "Compression may not reduce file size. Compare the result before deleting the source.",
   'nav.video': 'Video',
   'nav.audio': 'Audio',
   'nav.subtitle': 'Subtitles',

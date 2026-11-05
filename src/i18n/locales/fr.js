@@ -1,4 +1,10 @@
 export default {
+  "param.sourceSampleRate": "Conserver la fréquence d’origine",
+  "param.sourceChannels": "Conserver les canaux d’origine",
+  "common.preparing": "Préparation…",
+  "common.defaultOutput": "Utiliser le dossier de sortie par défaut",
+  "plan.compressionLarger": "La sortie estimée est plus volumineuse que l’original. Réduisez le débit pour diminuer la taille.",
+  "plan.compressionUncertain": "La compression ne réduit pas toujours la taille. Comparez le résultat avant de supprimer l’original.",
   'nav.video': 'Vidéo',
   'nav.audio': 'Audio',
   'nav.subtitle': 'Sous-titres',
