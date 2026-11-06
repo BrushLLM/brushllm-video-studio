@@ -22,7 +22,7 @@ jobs:
         run: node scripts/fetch-binaries.mjs --platform darwin-arm64
       - name: Unit + end-to-end tests (real FFmpeg)
         run: npm test
-      - run: npm run dist:mac-arm64 -- --publish never
+      - run: npm run dist:mac-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: mac-arm64
@@ -62,6 +62,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -69,8 +70,19 @@ jobs:
         run: |
           mkdir -p out
           find artifacts -name "*.dmg" -o -name "*.exe" | xargs -r -I{} cp {} out/
+          test "$(find out -name '*.dmg' | wc -l)" -eq 1
+          test "$(find out -name '*.exe' | wc -l)" -eq 2
+          for installer in out/*.dmg out/*.exe; do
+            mv "$installer" "${installer// /.}"
+          done
+          cd out
+          sha256sum *.dmg *.exe > SHA256SUMS
+          cd ..
           ls -la out/
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*
+          body_path: docs/releases/${{ github.ref_name }}.md
+          fail_on_unmatched_files: true
+          make_latest: true
           generate_release_notes: true
