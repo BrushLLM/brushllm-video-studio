@@ -1,0 +1,6 @@
+{"check":"WebM AV1","requested":"av1","resolved":"av1","plan":"AV1","actual":"VP9","status":"done"}
+{"check":"WebM scale container","plan":"WebM","outputExtension":".mp4"}
+{"check":"merge same codec, differing dimensions","plan":"stream copy","copyCompatible":false,"actualUsesFilter":true}
+{"check":"GBK burn preparation","params":{},"success":false,"code":"SUBTITLE_CHARSET_AMBIGUOUS","error":"Subtitle encoding is ambiguous; select the source encoding before processing this file."}
+{"check":"GBK burn preparation","params":{"sourceCharset":"gbk"},"success":true}
+{"check":"audio default conversion","params":{"format":"mp3","bitrate":192,"sampleRate":0,"channels":0},"issues":[{"field":"sampleRate","code":"sample-rate","message":"Invalid sample rate"},{"field":"channels","code":"channels","message":"Channels must be between 1 and 8"}]}

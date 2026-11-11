@@ -1,0 +1,3 @@
+{"check":"40 probe requests","concurrency":4,"peak":4,"wallMs":120}
+{"check":"40 probe requests","concurrency":40,"peak":40,"wallMs":62}
+{"check":"default GPU compression on low bitrate input","inputBytes":501857,"outputBytes":423366,"ratio":0.8435988737827708,"videoBitrate":475}
