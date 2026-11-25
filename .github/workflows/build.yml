@@ -4,12 +4,50 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: New release tag from main. Leave blank to build installers only.
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the release target
+        id: target
+        env:
+          REQUESTED_TAG: ${{ inputs.publish_tag }}
+        shell: bash
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            if [[ -z "$REQUESTED_TAG" ]]; then
+              exit 0
+            fi
+            if [[ "$GITHUB_REF" != refs/heads/main || "$REQUESTED_TAG" != "$tag" ]]; then
+              echo "::error::Select main and use the tag that matches package.json ($tag)"
+              exit 1
+            fi
+            existing_tag="$(git ls-remote --refs origin "refs/tags/$tag")"
+            if [[ -n "$existing_tag" ]]; then
+              echo "::error::Release tag $tag already exists"
+              exit 1
+            fi
+          elif [[ "$GITHUB_REF_NAME" != "$tag" ]]; then
+            echo "::error::The pushed tag must match package.json ($tag)"
+            exit 1
+          fi
+          test -s "docs/releases/$tag.md"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   mac-arm64:
+    needs: prepare
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +71,7 @@ jobs:
           if-no-files-found: error
 
   windows:
+    needs: prepare
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,35 +102,56 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [mac-arm64, windows]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [prepare, mac-arm64, windows]
+    if: needs.prepare.outputs.tag != ''
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: video-studio-release-${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: Flatten artifacts
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
         run: |
-          version="$(node -p "require('./package.json').version")"
-          test "$GITHUB_REF_NAME" = "v$version"
-          test -s "docs/releases/$GITHUB_REF_NAME.md"
-          shopt -s globstar nullglob
-          installers=(artifacts/**/*.dmg artifacts/**/*.exe)
-          test "${#installers[@]}" -eq 3
+          stem="BrushLLM Video Studio-${TAG#v}"
+          installers=(
+            "artifacts/mac-arm64/$stem-arm64.dmg"
+            "artifacts/windows/$stem-x64.exe"
+            "artifacts/windows/$stem-arm64.exe"
+          )
           mkdir -p out
           for installer in "${installers[@]}"; do
+            test -s "$installer"
             name="${installer##*/}"
             cp "$installer" "out/${name// /.}"
           done
           cd out
-          stem="BrushLLM.Video.Studio-$version"
+          stem="${stem// /.}"
           sha256sum "$stem-arm64.dmg" "$stem-x64.exe" "$stem-arm64.exe" > SHA256SUMS
           sha256sum -c SHA256SUMS
+      - name: Verify the release tag points to the packaged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              --raw-field "ref=refs/tags/$TAG" --raw-field "sha=$GITHUB_SHA" --silent
+          fi
+          git fetch --no-tags origin "refs/tags/$TAG"
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$GITHUB_SHA"
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
           files: out/*
-          body_path: docs/releases/${{ github.ref_name }}.md
+          body_path: docs/releases/${{ needs.prepare.outputs.tag }}.md
           fail_on_unmatched_files: true
           make_latest: true
           generate_release_notes: true
