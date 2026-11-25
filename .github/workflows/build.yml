@@ -8,6 +8,9 @@ on:
       publish_tag:
         description: New release tag from main. Leave blank to build installers only.
         type: string
+      reuse_build_run:
+        description: Run ID with successful macOS and Windows builds for this source. Optional.
+        type: string
 
 permissions:
   contents: read
@@ -15,6 +18,9 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       tag: ${{ steps.target.outputs.tag }}
     steps:
@@ -23,11 +29,16 @@ jobs:
         id: target
         env:
           REQUESTED_TAG: ${{ inputs.publish_tag }}
+          BUILD_RUN_ID: ${{ inputs.reuse_build_run }}
         shell: bash
         run: |
           tag="v$(node -p "require('./package.json').version")"
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
             if [[ -z "$REQUESTED_TAG" ]]; then
+              if [[ -n "$BUILD_RUN_ID" ]]; then
+                echo "::error::Reusing a build requires a release tag"
+                exit 1
+              fi
               exit 0
             fi
             if [[ "$GITHUB_REF" != refs/heads/main || "$REQUESTED_TAG" != "$tag" ]]; then
@@ -45,9 +56,39 @@ jobs:
           fi
           test -s "docs/releases/$tag.md"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Verify the existing build and source
+        if: inputs.reuse_build_run != ''
+        env:
+          BUILD_RUN_ID: ${{ inputs.reuse_build_run }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if [[ ! "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Enter a numeric build run ID"
+            exit 1
+          fi
+          run_api="repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID"
+          build_sha="$(gh api "$run_api" --jq '
+            select(.status == "completed" and .path == ".github/workflows/build.yml") | .head_sha
+          ')"
+          if [[ ! "$build_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "::error::The run must be a completed Video Studio build"
+            exit 1
+          fi
+          jobs="$(gh api "$run_api/jobs?filter=latest" --jq '[.jobs[] | select(.conclusion == "success") | .name]')"
+          if ! jq -e 'index("mac-arm64") != null and index("windows") != null' <<< "$jobs"; then
+            echo "::error::Both packaging jobs must have succeeded"
+            exit 1
+          fi
+          git fetch --no-tags origin "$build_sha"
+          if ! git diff --quiet "$build_sha" "$GITHUB_SHA" -- . ':(exclude).github/workflows/build.yml'; then
+            echo "::error::The build run must use the same application source and release notes"
+            exit 1
+          fi
 
   mac-arm64:
     needs: prepare
+    if: inputs.reuse_build_run == ''
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +113,7 @@ jobs:
 
   windows:
     needs: prepare
+    if: inputs.reuse_build_run == ''
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,10 +145,13 @@ jobs:
 
   release:
     needs: [prepare, mac-arm64, windows]
-    if: needs.prepare.outputs.tag != ''
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.tag != '' &&
+          (inputs.reuse_build_run != '' || (needs.mac-arm64.result == 'success' && needs.windows.result == 'success')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     concurrency:
       group: video-studio-release-${{ needs.prepare.outputs.tag }}
     steps:
@@ -114,28 +159,29 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Flatten artifacts
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.reuse_build_run || github.run_id }}
+      - name: Verify installers and generate SHA256SUMS
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
         shell: bash
         run: |
           stem="BrushLLM Video Studio-${TAG#v}"
-          installers=(
-            "artifacts/mac-arm64/$stem-arm64.dmg"
-            "artifacts/windows/$stem-x64.exe"
-            "artifacts/windows/$stem-arm64.exe"
-          )
           mkdir -p out
-          for installer in "${installers[@]}"; do
-            test -s "$installer"
-            name="${installer##*/}"
+          for suffix in arm64.dmg x64.exe arm64.exe; do
+            name="$stem-$suffix"
+            installer="$(find artifacts -type f -name "$name" -print)"
+            if [[ ! -s "$installer" ]]; then
+              echo "::error::Expected exactly one nonempty installer named $name"
+              exit 1
+            fi
             cp "$installer" "out/${name// /.}"
           done
           cd out
           stem="${stem// /.}"
           sha256sum "$stem-arm64.dmg" "$stem-x64.exe" "$stem-arm64.exe" > SHA256SUMS
           sha256sum -c SHA256SUMS
-      - name: Verify the release tag points to the packaged commit
+      - name: Create and verify the release tag
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
