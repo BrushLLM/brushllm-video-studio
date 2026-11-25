@@ -67,7 +67,7 @@ export default function MetadataModal({ file, onClose }) {
             </tbody>
           </table>
 
-          <div className="action-bar">
+          <div className="metadata-actions">
             <button className="btn btn-secondary" onClick={() => setShowRaw(!showRaw)}>
               {t('meta.showRaw')}
             </button>

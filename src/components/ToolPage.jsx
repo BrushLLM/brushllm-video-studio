@@ -1,45 +1,47 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { bridge } from '../lib/bridge';
 import { fileKindOf, filterForSection, inputFilesForOp } from '../../shared/media.mjs';
 import { buildPlan } from '../../shared/plan.mjs';
-import { validateOperation } from '../../shared/validation.mjs';
+import { resolveOperation } from '../../shared/resolve.mjs';
 import { opsForSection, defaultParams, engineParams } from '../ops';
 import { parseTimeInput } from '../lib/format';
-import DropZone from './DropZone';
-import FileList from './FileList';
+import SourceFiles from './SourceFiles';
 import OperationGrid from './OperationGrid';
 import ParamPanel from './ParamPanel';
+import ToolFooter from './ToolFooter';
 import ExtraInput from './ExtraInput';
 import MetadataModal from './MetadataModal';
 import { PlanSummary } from './MediaSummary';
+import VideoPreview from './VideoPreview';
+import WorkspacePane from './WorkspacePane';
 import { Icon } from './icons';
 
-const SECTION_DROP_KIND = { video: 'media', audio: 'audio', subtitle: 'mediaAndSubs' };
-
-export default function ToolPage({ section, files, setFiles, onTransfer, gpuEncoders, defaultOutputDir = '', drafts = {} }) {
+export default memo(function ToolPage({ section, files, setFiles, onTransfer, platform, gpuEncoders, defaultOutputDir = '', drafts }) {
   const { t } = useI18n();
   const ops = useMemo(() => opsForSection(section), [section]);
-  const [selectedOp, setSelectedOp] = useState(() => drafts[section]?.selectedOp || null);
-  const [params, setParams] = useState(() => drafts[section]?.params || {});
+  const [selectedOp, setSelectedOp] = useState(() => drafts[section]?.selectedOp || ops[0].id);
+  const [params, setParams] = useState(() => drafts[section]?.params || defaultParams(ops[0]));
   const [extras, setExtras] = useState(() => drafts[section]?.extras || {});
   const [sourceCharset, setSourceCharset] = useState(() => drafts[section]?.sourceCharset || 'auto');
   const [outputDir, setOutputDir] = useState(() => drafts[section]?.outputDir ?? null);
+  const [clearedFiles, setClearedFiles] = useState(() => drafts[section]?.clearedFiles || []);
   const [instantBusy, setInstantBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [addedCount, setAddedCount] = useState(0);
   const submission = useRef(false);
   const [toast, setToast] = useState(null);
   const [metaFile, setMetaFile] = useState(null);
+  const [view, setView] = useState('preview');
+  const queueButton = useRef(null);
   const toastTimer = useRef(null);
-  const configRef = useRef(null);
 
   useEffect(() => {
-    drafts[section] = { selectedOp, params, extras, sourceCharset, outputDir };
-  }, [section, drafts, selectedOp, params, extras, sourceCharset, outputDir]);
+    drafts[section] = { selectedOp, params, extras, sourceCharset, outputDir, clearedFiles };
+  }, [section, drafts, selectedOp, params, extras, sourceCharset, outputDir, clearedFiles]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const op = ops.find((o) => o.id === selectedOp) || null;
-  const effectiveOutputDir = outputDir ?? defaultOutputDir;
+  const op = ops.find((o) => o.id === selectedOp);
 
   const showToast = (msg, kind = 'success') => {
     setToast({ msg, kind });
@@ -58,7 +60,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
     setFiles((prev) => {
       const requestToken = Date.now() + Math.random();
       const known = new Set(prev.map((f) => f.path));
-      const fresh = accepted
+      const fresh = [...new Set(accepted)]
         .filter((p) => !known.has(p))
         .map((p) => ({ path: p, name: p.split(/[/\\]/).pop(), kind: fileKindOf(p), probing: false, probe: null, raw: null, requestToken }));
       return [...prev, ...fresh];
@@ -68,9 +70,9 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
   // Probe media files asynchronously once added. Use requestToken to avoid
   // perpetual probing when files are transferred between pages.
   useEffect(() => {
-    const toProbe = files.filter((f) => (f.kind === 'video' || f.kind === 'audio') && !f.probe && !f.probing && !f.probeFailed);
-    if (!toProbe.length) return;
-    setFiles((prev) => prev.map((f) => (toProbe.includes(f) ? { ...f, probing: true } : f)));
+    const toProbe = new Set(files.filter((f) => (f.kind === 'video' || f.kind === 'audio') && !f.probe && !f.probing && !f.probeFailed));
+    if (!toProbe.size) return;
+    setFiles((prev) => prev.map((f) => (toProbe.has(f) ? { ...f, probing: true } : f)));
     toProbe.forEach(async (f) => {
       const token = f.requestToken;
       try {
@@ -80,16 +82,12 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
         setFiles((prev) => prev.map((x) => (x.path === f.path && x.requestToken === token ? { ...x, probing: false, probeFailed: true } : x)));
       }
     });
-  }, [files]);
-
-  const browse = async () => {
-    const picked = await bridge.openFiles(SECTION_DROP_KIND[section]);
-    if (picked?.length) addFiles(picked);
-  };
+  }, [files, setFiles]);
 
   // ------------------------------------------------------------ op selection
 
   const selectOp = (id) => {
+    if (id === selectedOp) return;
     const next = ops.find((o) => o.id === id);
     if (next.modal) {
       const first = inputFilesForOp(files, next.inputKind)[0];
@@ -97,29 +95,19 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
       setMetaFile(first);
       return;
     }
-    const opening = id !== selectedOp;
-    setSelectedOp(opening ? id : null);
+    setSelectedOp(id);
     setParams(defaultParams(next));
     setExtras({});
     setSourceCharset('auto');
-    // The config panel sits below the whole tool grid — bring it into view
-    // as soon as a tool is selected so the first screen never feels dead.
-    if (opening) {
-      requestAnimationFrame(() => {
-        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-        configRef.current?.scrollIntoView({ behavior, block: 'start' });
-      });
-    }
+    setAddedCount(0);
   };
 
   // ------------------------------------------------------- plan + validation
 
-  const mainInputs = op ? inputFilesForOp(files, op.inputKind) : [];
-  const engineOp = op ? (op.mapsTo || op.id) : null;
-  const effectiveParams = op ? engineParams(op.id, params, mainInputs) : params;
+  const mainInputs = useMemo(() => inputFilesForOp(files, op.inputKind), [files, op]);
 
   const resolved = useMemo(() => {
-    if (!op || op.instant || op.modal) return null;
+    if (op.instant) return null;
     const p = engineParams(op.id, params, mainInputs);
     if (op.extraInput === 'subtitle') p.sourceCharset = sourceCharset;
     for (const k of ['startSec', 'endSec', 'timeSec']) {
@@ -127,20 +115,21 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
     }
     if (op.id === 'subtitle.extract') p.streamIndex = Number(params.streamIndex ?? 0);
     const engineOp = op.mapsTo || op.id;
-    const validationResult = validateOperation(engineOp, p, mainInputs[0]?.probe);
-    return { engineOp, params: p, validationResult };
-  }, [op, params, mainInputs, sourceCharset]);
+    const allProbes = engineOp === 'video.merge' && mainInputs.length > 1 && mainInputs.every((file) => file.probe)
+      ? mainInputs.map((file) => file.probe) : undefined;
+    const decision = resolveOperation(engineOp, p, mainInputs[0]?.probe, { allProbes, gpuEncoders });
+    return { engineOp, params: p, allProbes, decision };
+  }, [op, params, mainInputs, sourceCharset, gpuEncoders]);
 
   const plan = useMemo(() => {
-    if (!resolved || !mainInputs.length) return null;
-    const source = mainInputs[0].probe;
-    if (!source) return null;
-    const allProbes = op.id === 'video.merge' ? files.map((f) => f.probe).filter(Boolean) : undefined;
-    return buildPlan(resolved.engineOp, resolved.params, source, { allProbes, gpuEncoders });
-  }, [resolved, mainInputs, files, gpuEncoders]);
+    const source = mainInputs[0]?.probe;
+    if (!resolved || !source || resolved.decision.error) return null;
+    if (op.id === 'video.merge' && !resolved.allProbes) return null;
+    const { encoding, merge } = resolved.decision;
+    return buildPlan(resolved.engineOp, resolved.params, source, { allProbes: resolved.allProbes, encoding, merge });
+  }, [op.id, resolved, mainInputs]);
 
   const validation = useMemo(() => {
-    if (!op) return { ok: false, reason: null };
     if (!mainInputs.length) {
       return { ok: false, reason: op.inputKind === 'subtitle' ? t('msg.needSubtitle') : op.inputKind === 'audio' ? t('msg.needAudio') : t('msg.needVideo') };
     }
@@ -152,54 +141,40 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
       const video = mainInputs[0];
       if (!video.probe?.subtitleStreams?.length) return { ok: false, reason: t('common.noStreams') };
     }
-    // Use shared validation for non-instant operations. validateOperation
-    // returns an issues ARRAY ([] = valid) — never read .ok off it. The
-    // first issue renders through its localized validation.<code> key.
-    const issues = resolved?.validationResult;
-    if (!op.instant && Array.isArray(issues) && issues.length) {
-      return { ok: false, reason: t(`validation.${issues[0].code}`, issues[0].params) };
+    if (op.id === 'video.merge' && !resolved.allProbes) {
+      return { ok: false, reason: t(mainInputs.some((file) => file.probeFailed) ? 'msg.probeFailed' : 'common.probing') };
     }
-    if (params.videoBitrate != null && params.videoBitrate !== '') {
-      const n = Number(params.videoBitrate);
-      if (!isFinite(n) || n < 100 || n > 100000) return { ok: false, reason: t('param.bitrateRange', { min: 100, max: 100000 }) };
-    }
-    // Demanding GPU with no hardware encoder available is a hard error —
-    // never silently fall back to CPU.
-    if ((op.id === 'video.convert' || op.id === 'video.compress') &&
-        params.hwStrategy === 'gpu' && !(gpuEncoders || []).length) {
-      return { ok: false, reason: t('msg.gpuUnavailable') };
-    }
-    // Crop: when ratio is set, each file generates its own dimensions; only
-    // custom dimensions need validation here.
-    if (op.id === 'video.crop' && params.ratio === 'custom' &&
-        (Number(params.w) <= 0 || Number(params.h) <= 0)) {
-      return { ok: false, reason: t('msg.needDimensions') };
-    }
-    if (op.id === 'video.scale' && params.size === 'custom' &&
-        (Number(params.width) <= 0 || Number(params.height) <= 0)) {
-      return { ok: false, reason: t('msg.needDimensions') };
+    const issue = resolved?.decision.issues?.[0];
+    if (issue) return { ok: false, reason: t(`validation.${issue.code}`, issue.params) };
+    const error = resolved?.decision.error;
+    if (error) {
+      if (error === 'gpu-unavailable') return { ok: false, reason: t('msg.gpuUnavailable') };
+      if (error === 'gpu-container-conflict') return { ok: false, reason: t('validation.gpu-container-conflict') };
+      return { ok: false, reason: error };
     }
     return { ok: true, reason: null };
-  }, [op, mainInputs, extras, params, gpuEncoders, resolved, t]);
+  }, [op, mainInputs, extras, resolved, t]);
 
   // ------------------------------------------------------------- run / queue
 
   const runInstant = async () => {
     if (instantBusy) return;
     setInstantBusy(true);
-    const p = engineParams(op.id, params, mainInputs);
     try {
-      if (op.id === 'subtitle.convert') {
-        for (const f of mainInputs) {
-          const r = await bridge.subtitleConvert(f.path, p.targetFormat, sourceCharset);
-          showToast(t('msg.subtitleDone', { file: r.outputPath.split(/[/\\]/).pop() }));
-        }
-      } else if (op.id === 'subtitle.shift') {
-        const results = await bridge.subtitleShift(mainInputs.map((f) => f.path), p.offsetMs, Boolean(p.overwrite), sourceCharset);
+      const results = await bridge.processSubtitles({
+        op: op.id, inputs: mainInputs.map((file) => file.path), params: engineParams(op.id, params, mainInputs), sourceCharset
+      });
+      const failures = results.filter((result) => result.error);
+      if (failures.length) {
+        const [first] = failures;
+        const message = t('msg.subtitleBatchFailed', {
+          done: results.length - failures.length, failed: failures.length, file: first.input.split(/[/\\]/).pop()
+        });
+        showToast(`${message} ${first.error}`, 'error');
+      } else if (results.length === 1) {
         showToast(t('msg.subtitleDone', { file: results[0].outputPath.split(/[/\\]/).pop() }));
-      } else if (op.id === 'subtitle.reencode') {
-        const results = await bridge.subtitleReencode(mainInputs.map((f) => f.path), p.charset, Boolean(p.overwrite), sourceCharset);
-        showToast(t('msg.subtitleDone', { file: results[0].outputPath.split(/[/\\]/).pop() }));
+      } else {
+        showToast(t('msg.subtitleBatchDone', { n: results.length }));
       }
     } catch (e) {
       showToast(String(e.message || e), 'error');
@@ -209,7 +184,7 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
   };
 
   const submit = async () => {
-    if (!op || !validation.ok || submission.current) return;
+    if (!validation.ok || submission.current) return;
     if (op.instant) {
       submission.current = true;
       try { await runInstant(); } finally { submission.current = false; }
@@ -217,26 +192,24 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
     }
     submission.current = true;
     setSubmitting(true);
-    const extraPaths = op.extraInput ? (extras[op.extraInput] || []) : [];
-    const specs = [];
-    if (resolved.engineOp === 'video.merge') {
-      specs.push({ op: resolved.engineOp, params: resolved.params, inputs: mainInputs.map((f) => f.path), outputDir });
-    } else if (resolved.engineOp === 'subtitle.extract') {
-      specs.push({ op: resolved.engineOp, params: resolved.params, inputs: [mainInputs[0].path], outputDir });
-    } else if (op.id === 'video.crop' && params.ratio && params.ratio !== 'custom') {
-      // Crop with preset ratio: generate per-file parameters
-      for (const f of mainInputs) {
-        const perFileParams = engineParams(op.id, params, [f]);
-        specs.push({ op: resolved.engineOp, params: perFileParams, inputs: [f.path, ...extraPaths], outputDir });
-      }
-    } else {
-      for (const f of mainInputs) {
-        specs.push({ op: resolved.engineOp, params: resolved.params, inputs: [f.path, ...extraPaths], outputDir });
-      }
-    }
+    setAddedCount(0);
     try {
+      const extraPaths = extras[op.extraInput] || [];
+      const makeJob = (inputs, jobParams = resolved.params) => ({ op: resolved.engineOp, params: jobParams, inputs, outputDir });
+      const cropToRatio = op.id === 'video.crop' && params.ratio && params.ratio !== 'custom';
+      let specs;
+      if (resolved.engineOp === 'video.merge') {
+        specs = [makeJob(mainInputs.map((f) => f.path))];
+      } else if (resolved.engineOp === 'subtitle.extract') {
+        specs = [makeJob([mainInputs[0].path])];
+      } else {
+        specs = mainInputs.map((file) => makeJob(
+          [file.path, ...extraPaths],
+          cropToRatio ? engineParams(op.id, params, [file]) : resolved.params
+        ));
+      }
       const added = await bridge.addJobs(specs);
-      showToast(t('msg.jobsAdded', { n: added.length }));
+      setAddedCount(added.length);
     } catch (e) {
       showToast(String(e.message || e), 'error');
     } finally {
@@ -245,76 +218,40 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
     }
   };
 
-  // ------------------------------------------------------------------ render
+  const batchSize = op.batch ? mainInputs.length : 0;
+  let submitLabel = t('common.addToQueue');
+  if (submitting) submitLabel = t('common.preparing');
+  else if (op.instant) submitLabel = t(instantBusy ? 'common.processing' : 'common.runNow');
+  else if (batchSize > 1) submitLabel = t('common.addNToQueue', { n: batchSize });
 
-  const shortcuts = section === 'video'
-    ? [{ target: 'audio', key: 'shortcut.openAudio' }, { target: 'subtitle', key: 'shortcut.openSubtitle' }]
-    : [{ target: 'video', key: 'shortcut.openVideo' }];
+  const output = op.instant ? null : {
+    outputDir, defaultOutputDir, setOutputDir, onError: (message) => showToast(message, 'error')
+  };
+  const previewFile = files.find((file) => file.probe?.video);
+  const openQueue = () => {
+    setView('queue');
+    queueButton.current?.focus();
+  };
 
   return (
-    <div className="page-inner">
-      <div className="page-header">
-        <h1><span className={`domain-dot ${section}`} aria-hidden="true" />{t(`nav.${section}`)}</h1>
-        <p>{t('app.tagline')}</p>
-      </div>
+    <div className="workbench">
+      <div className="workbench-controls">
+        <div className="controls-scroll">
+          <OperationGrid ops={ops} selected={selectedOp} onSelect={selectOp} />
+          <section className="inspector" aria-labelledby="inspector-title">
+            <header className="inspector-header">
+              <span className="inspector-icon"><Icon name={op.icon} size={22} /></span>
+              <div>
+                <h2 id="inspector-title">{t(op.id)}</h2>
+                <p>{t(`${op.id}.desc`)}</p>
+              </div>
+            </header>
 
-      <div className="section-label meta-first">{t('extra.mainInput')}</div>
-      <DropZone onFiles={addFiles} section={section} compact={files.length > 0} />
-      <div className="action-bar">
-        <button className="btn btn-secondary" onClick={browse}>
-          <Icon name="plus" size={13} /> {t('common.addFiles')}
-        </button>
-        {files.length > 0 && (
-          <button className="btn btn-plain" onClick={() => setFiles([])}>{t('common.clearAll')}</button>
-        )}
-        {files.length > 0 && (
-          <span className="action-note">
-            {(() => {
-              const base = section === 'video' ? 'videoFile' : section === 'audio' ? 'audioFile' : 'subtitleFile';
-              return `${files.length} ${t(files.length === 1 ? `common.${base}` : `common.${base}s`)}`;
-            })()}
-            {op?.batch && mainInputs.length > 1 ? ` · ${t('common.batchNote')}` : ''}
-          </span>
-        )}
-      </div>
-
-      <FileList
-        files={files}
-        onRemove={(path) => setFiles((prev) => prev.filter((f) => f.path !== path))}
-        onRetry={(path) => setFiles((prev) => prev.map((f) => f.path === path
-          ? { ...f, probeFailed: false, probing: false, requestToken: Date.now() + Math.random() } : f))}
-        onReorder={op?.reorderable ? (next) => setFiles(next) : null}
-        reorderable={Boolean(op?.reorderable)}
-      />
-
-      <div className="section-label">{t('section.tools')}</div>
-      <OperationGrid ops={ops} selected={selectedOp} onSelect={selectOp} />
-
-      {op && !op.modal && (
-        <div ref={configRef}>
-          <div className="section-label">{t(op.id)}</div>
-          <ParamPanel op={op} params={params} setParams={setParams} files={files} gpuEncoders={gpuEncoders} />
-
-          {op.extraInput && (
-            <ExtraInput
-              kind={op.extraInput}
-              multiple={op.extraMultiple}
-              paths={extras[op.extraInput]}
-              setPaths={(paths) => setExtras((prev) => ({ ...prev, [op.extraInput]: paths }))}
-            />
-          )}
-
-          {(op.instant || op.extraInput === 'subtitle') && (
-            <div className="card param-panel">
-              <div className="param-grid">
-                <div className="param-field">
+            <ParamPanel op={op} params={params} setParams={setParams} files={files} gpuEncoders={gpuEncoders}>
+              {(op.instant || op.extraInput === 'subtitle') && (
+                <label className="param-field">
                   <span className="param-label">{t('param.sourceCharset')}</span>
-                  <select
-                    className="field"
-                    value={sourceCharset}
-                    aria-label={t('param.sourceCharset')}
-                    onChange={(e) => setSourceCharset(e.target.value)}
-                  >
+                  <select className="field" value={sourceCharset} onChange={(e) => setSourceCharset(e.target.value)}>
                     <option value="auto">{t('param.autoDetect')}</option>
                     <option value="gbk">GBK</option>
                     <option value="gb2312">GB2312</option>
@@ -324,67 +261,39 @@ export default function ToolPage({ section, files, setFiles, onTransfer, gpuEnco
                     <option value="iso-8859-1">ISO-8859-1</option>
                     <option value="windows-1252">Windows-1252</option>
                   </select>
-                </div>
-              </div>
-            </div>
-          )}
+                </label>
+              )}
+            </ParamPanel>
 
-          {!op.instant && plan && <PlanSummary plan={plan} source={mainInputs[0]?.probe} fileName={mainInputs[0]?.name} />}
-
-          <div className="action-bar">
-            <button
-              className={`btn ${op.instant ? 'btn-instant' : 'btn-primary'}`}
-              disabled={!validation.ok || instantBusy || submitting}
-              title={validation.reason || undefined}
-              onClick={submit}
-            >
-              <Icon name={op.instant ? 'bolt' : 'play'} size={13} />
-              {submitting ? t('common.preparing') : op.instant
-                ? (instantBusy ? t('common.processing') : t('common.runNow'))
-                : mainInputs.length > 1 && op.batch
-                  ? t('common.addNToQueue', { n: mainInputs.length })
-                  : t('common.addToQueue')}
-            </button>
-            {!validation.ok && validation.reason && (
-              <span className="action-note">{validation.reason}</span>
+            {op.extraInput && (
+              <ExtraInput
+                kind={op.extraInput}
+                multiple={op.extraMultiple}
+                paths={extras[op.extraInput]}
+                setPaths={(paths) => setExtras((prev) => ({ ...prev, [op.extraInput]: paths }))}
+              />
             )}
-            {!op.instant && (
-              <button
-                className="btn btn-ghost output-directory"
-                title={effectiveOutputDir || t('common.sameFolder')}
-                onClick={async () => {
-                  const dir = await bridge.pickDirectory();
-                  if (dir) setOutputDir(dir);
-                }}
-              >
-                <Icon name="folder" size={13} />
-                {effectiveOutputDir || t('common.sameFolder')}
-              </button>
-            )}
-            {!op.instant && effectiveOutputDir && (
-              <button className="btn btn-plain" onClick={() => setOutputDir('')}>{t('common.sameFolder')}</button>
-            )}
-            {!op.instant && outputDir != null && (
-              <button className="btn btn-plain" onClick={() => setOutputDir(null)}>{t('common.defaultOutput')}</button>
-            )}
-          </div>
+          </section>
         </div>
-      )}
-
-      <div className="action-bar shortcut-bar">
-        {shortcuts.map((s) => (
-          <button key={s.target} className="btn btn-ghost" onClick={() => onTransfer(s.target)}>
-            <Icon name={s.target === 'audio' ? 'audio' : s.target === 'subtitle' ? 'subtitle' : 'video'} size={13} />
-            {t(s.key)}
-          </button>
-        ))}
+        <ToolFooter
+          output={output} submitLabel={submitLabel} disabled={!validation.ok || instantBusy || submitting}
+          reason={validation.reason} notice={toast} onSubmit={submit} addedCount={addedCount} onOpenQueue={view === 'preview' ? openQueue : undefined}
+        />
       </div>
-
+      <WorkspacePane section={section} platform={platform} view={view} onViewChange={setView} queueButton={queueButton}>
+        <SourceFiles
+          section={section} files={files} setFiles={setFiles} onAdd={addFiles}
+          onTransfer={onTransfer} reorderable={Boolean(op.reorderable)}
+          clearedFiles={clearedFiles} setClearedFiles={setClearedFiles}
+        />
+        {(previewFile || plan) && <div className="preview-grid" data-comparison={Boolean(previewFile && plan)}>
+          {previewFile && <VideoPreview key={`${previewFile.path}:${previewFile.requestToken}`} file={previewFile} />}
+          {plan && <PlanSummary
+            plan={plan} source={mainInputs[0].probe} fileName={mainInputs[0].name} sampledBatch={batchSize > 1}
+          />}
+        </div>}
+      </WorkspacePane>
       {metaFile && <MetadataModal file={metaFile} onClose={() => setMetaFile(null)} />}
-
-      {toast && (
-        <div className={`toast ${toast.kind}`} role="status" aria-live="polite">{toast.msg}</div>
-      )}
     </div>
   );
-}
+});

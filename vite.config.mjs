@@ -21,9 +21,11 @@ export default defineConfig({
   root: 'src',
   base: './',
   plugins: [react(), devCsp()],
+  optimizeDeps: { include: ['brushllm-video-studio/media'] },
   build: {
     outDir: '../dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    commonjsOptions: { include: [/node_modules/, /shared[/\\]media\.cjs$/] }
   },
   server: {
     port: 5188,

@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { JobManager } = require('../../electron/engine/queue');
-const { probe, summarize } = require('../../electron/engine/probe');
+const { previewFrame, probe, summarize } = require('../../electron/engine/probe');
 const { resolveBinaries } = require('../../electron/engine/binaries');
 const subs = require('../../shared/subtitles');
 
@@ -204,6 +204,40 @@ test('video.extractAudio copy keeps aac as m4a', async () => {
   assert.match(job.outputPath, /\.m4a$/);
   const { stream } = await streamOf(job.outputPath, 'audio');
   assert.equal(stream.codec_name, 'aac');
+});
+
+test('video.extractAudio copy uses the first track even if another track is default', async () => {
+  const input = out('mixed-audio.mkv');
+  ff(['-i', out('sample.mp4'), '-f', 'lavfi', '-i', 'sine=frequency=660:duration=1',
+    '-map', '0:v:0', '-map', '1:a:0', '-map', '0:a:0',
+    '-c:v', 'copy', '-c:a:0', 'pcm_s24be', '-c:a:1', 'aac', '-ac:a:1', '2',
+    '-disposition:a:0', '0', '-disposition:a:1', 'default', '-t', '1', input]);
+
+  const job = await runJob({ op: 'video.extractAudio', params: { format: 'copy' }, inputs: [input], outputPath: out('t-first-audio.mka') });
+  assert.match(job.outputPath, /\.aiff$/);
+  const raw = await probeFile(job.outputPath);
+  assert.deepEqual(raw.streams.map((stream) => [stream.codec_type, stream.codec_name]), [['audio', 'pcm_s24be']]);
+});
+
+test('video.convert copies the planned audio track and keeps compatible subtitles', async () => {
+  const input = out('mixed-audio-with-subtitles.mkv');
+  ff(['-i', out('sample_sub.mkv'), '-f', 'lavfi', '-i', 'sine=frequency=660:duration=3',
+    '-map', '0:v:0', '-map', '1:a:0', '-map', '0:a:0', '-map', '0:s:0',
+    '-c:v', 'copy', '-c:a:0', 'libopus', '-c:a:1', 'aac', '-ac:a:1', '2', '-c:s', 'copy',
+    '-disposition:a:0', '0', '-disposition:a:1', 'default', '-t', '3', input]);
+  const params = { container: 'webm', videoCodec: 'vp9', audioCodec: 'auto', hwStrategy: 'cpu' };
+  const job = await runJob({ op: 'video.convert', params, requestedParams: params, inputs: [input], outputPath: out('t-audio-with-subtitles.webm') });
+  const raw = await probeFile(job.outputPath);
+  assert.deepEqual(raw.streams.map((stream) => stream.codec_name), ['vp9', 'opus', 'webvtt']);
+  assert.equal(raw.streams.find((stream) => stream.codec_type === 'audio').channels, 1);
+});
+
+test('preview decodes a bounded JPEG frame from a local video', async () => {
+  const frame = await previewFrame(FFMPEG, out('sample.mp4'));
+  assert.match(frame, /^data:image\/jpeg;base64,/);
+  const jpeg = Buffer.from(frame.split(',')[1], 'base64');
+  assert.deepEqual([...jpeg.subarray(0, 3)], [0xff, 0xd8, 0xff]);
+  assert.ok(jpeg.length < 1024 * 1024);
 });
 
 test('video.extractAudio mp3 re-encodes', async () => {

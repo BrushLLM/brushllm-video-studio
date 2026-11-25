@@ -2,9 +2,6 @@ import { useI18n } from '../i18n';
 import { Icon } from './icons';
 import { bridge } from '../lib/bridge';
 
-// Secondary input (audio / subtitle) — visually and semantically separate
-// from the main input file list. The accent color follows the input's own
-// domain (audio=mint, subtitle=lemon).
 export default function ExtraInput({ kind, multiple, paths, setPaths }) {
   const { t } = useI18n();
   const labelKey = kind === 'audio' ? 'extra.audioInput' : 'extra.subtitleInput';
@@ -18,7 +15,7 @@ export default function ExtraInput({ kind, multiple, paths, setPaths }) {
   };
 
   return (
-    <div className={`card extra-input-card kind-${kind}`}>
+    <div className="extra-input">
       <div className="extra-input-head">
         <Icon name={kind === 'audio' ? 'audio' : 'subtitle'} size={15} />
         <span className="param-label">{t(labelKey)}</span>

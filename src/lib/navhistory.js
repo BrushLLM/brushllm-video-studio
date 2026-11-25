@@ -1,4 +1,4 @@
-// Browser-like page history for sidebar navigation + mouse back/forward
+// Browser-like page history for navigation and mouse back/forward
 // buttons (XButton1 = back, XButton2 = forward). Pure functions, unit-tested.
 
 export function createHistory(initial) {

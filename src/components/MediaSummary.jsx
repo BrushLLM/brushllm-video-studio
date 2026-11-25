@@ -18,72 +18,81 @@ function sizeDisplay(sizeEstimate, sizeNoteKey, t) {
   return t(sizeNoteKey || 'plan.sizeCRF');
 }
 
-export function PlanSummary({ plan, source, fileName }) {
+export function PlanSummary({ plan, source, fileName, sampledBatch }) {
   const { t } = useI18n();
   if (!plan) return null;
   return (
-    <div className="card summary-card">
-      <div className="summary-head">{t('plan.title')}</div>
-      <div className="summary-cols">
-        <div className="summary-col">
-          <div className="summary-col-title">{t('plan.source')}</div>
-          {fileName && (
-            <SummaryRow label={t('common.fileName')}>
-              <span className="summary-filename" title={fileName}>{fileName}</span>
-            </SummaryRow>
-          )}
-          {source && source.durationSec > 0 && (
-            <SummaryRow label={t('common.duration')}>{formatDuration(source.durationSec)}</SummaryRow>
-          )}
-          {source && source.bitrate > 0 && (
-            <SummaryRow label={t('common.bitrate')}>{formatBitrate(source.bitrate)}</SummaryRow>
-          )}
-          {source && source.size > 0 && (
-            <SummaryRow label={t('common.size')}>{formatSize(source.size)}</SummaryRow>
-          )}
-          {source?.video && (
-            <SummaryRow label={t('common.resolution')}>{source.video.width}×{source.video.height}</SummaryRow>
-          )}
-          {source?.video?.codec && (
-            <SummaryRow label={t('common.codec')}>{source.video.codec.toUpperCase()}</SummaryRow>
-          )}
-        </div>
-        <div className="summary-arrow" aria-hidden="true">→</div>
-        <div className="summary-col output">
-          <div className="summary-col-title">{t('plan.output')}</div>
-          {plan.containerLabel && (
-            <SummaryRow label={t('param.container')}>{plan.containerLabel}</SummaryRow>
-          )}
-          <SummaryRow label={t('common.size')}>
-            <span className="summary-size">{sizeDisplay(plan.sizeEstimate, plan.sizeNoteKey, t)}</span>
-          </SummaryRow>
-          {plan.durationSec > 0 && (
-            <SummaryRow label={t('common.duration')}>{formatDuration(plan.durationSec)}</SummaryRow>
-          )}
-          {plan.videoEncoderLabel && (
-            <SummaryRow label={t('common.codec')}>{plan.videoEncoderLabel}</SummaryRow>
-          )}
-          {plan.cpuNote && !plan.hw && (
-            <SummaryRow label={t('param.hwStrategy')}>
-              <span className="summary-cpu">{t('plan.cpuNote')}</span>
-            </SummaryRow>
-          )}
-          {plan.width && plan.height && (
-            <SummaryRow label={t('common.resolution')}>{plan.width}×{plan.height}</SummaryRow>
-          )}
-          {plan.fps ? (
-            <SummaryRow label={t('common.fps')}>{plan.fps} FPS</SummaryRow>
-          ) : null}
-          {plan.qualityLabel && (
-            <SummaryRow label={t('plan.quality')}>{plan.qualityLabel}</SummaryRow>
-          )}
-          {plan.audioEncoderLabel && (
-            <SummaryRow label={t('nav.audio')}>
-              {plan.audioEncoderLabel}{plan.audioCopy ? ` · ${t('plan.audioCopy')}` : ''}
-            </SummaryRow>
-          )}
-        </div>
+    <div className="summary-card">
+      <div className="plan-overview">
+        <h3>{t('plan.title')}</h3>
+        <span className="plan-metrics">
+          {[plan.containerLabel, plan.videoEncoderLabel || plan.audioEncoderLabel, sizeDisplay(plan.sizeEstimate, plan.sizeNoteKey, t)]
+            .filter(Boolean).join(' · ')}
+        </span>
       </div>
+      {sampledBatch && <p className="plan-sample" title={fileName}>{t('workspace.planSample', { file: fileName })}</p>}
+      <details className="plan-details">
+        <summary>{t('workspace.details')}</summary>
+        <div className="summary-cols">
+          <div className="summary-col">
+            <div className="summary-col-title">{t('plan.source')}</div>
+            {fileName && (
+              <SummaryRow label={t('common.fileName')}>
+                <span className="summary-filename" title={fileName}>{fileName}</span>
+              </SummaryRow>
+            )}
+            {source && source.durationSec > 0 && (
+              <SummaryRow label={t('common.duration')}>{formatDuration(source.durationSec)}</SummaryRow>
+            )}
+            {source && source.bitrate > 0 && (
+              <SummaryRow label={t('common.bitrate')}>{formatBitrate(source.bitrate)}</SummaryRow>
+            )}
+            {source && source.size > 0 && (
+              <SummaryRow label={t('common.size')}>{formatSize(source.size)}</SummaryRow>
+            )}
+            {source?.video && (
+              <SummaryRow label={t('common.resolution')}>{source.video.width}×{source.video.height}</SummaryRow>
+            )}
+            {source?.video?.codec && (
+              <SummaryRow label={t('common.codec')}>{source.video.codec.toUpperCase()}</SummaryRow>
+            )}
+          </div>
+          <div className="summary-col">
+            <div className="summary-col-title">{t('plan.output')}</div>
+            {plan.containerLabel && (
+              <SummaryRow label={t('param.container')}>{plan.containerLabel}</SummaryRow>
+            )}
+            <SummaryRow label={t('common.size')}>
+              <span className="summary-size">{sizeDisplay(plan.sizeEstimate, plan.sizeNoteKey, t)}</span>
+            </SummaryRow>
+            {plan.durationSec > 0 && (
+              <SummaryRow label={t('common.duration')}>{formatDuration(plan.durationSec)}</SummaryRow>
+            )}
+            {plan.videoEncoderLabel && (
+              <SummaryRow label={t('common.codec')}>{plan.videoEncoderLabel}</SummaryRow>
+            )}
+            {plan.cpuNote && !plan.hw && (
+              <SummaryRow label={t('param.hwStrategy')}>
+                <span className="summary-cpu">{t('plan.cpuNote')}</span>
+              </SummaryRow>
+            )}
+            {plan.width && plan.height && (
+              <SummaryRow label={t('common.resolution')}>{plan.width}×{plan.height}</SummaryRow>
+            )}
+            {plan.fps ? (
+              <SummaryRow label={t('common.fps')}>{plan.fps} FPS</SummaryRow>
+            ) : null}
+            {plan.qualityLabel && (
+              <SummaryRow label={t('plan.quality')}>{plan.qualityLabel}</SummaryRow>
+            )}
+            {plan.audioEncoderLabel && (
+              <SummaryRow label={t('nav.audio')}>
+                {plan.audioEncoderLabel}{plan.audioCopy ? ` · ${t('plan.audioCopy')}` : ''}
+              </SummaryRow>
+            )}
+          </div>
+        </div>
+      </details>
       {plan.warningKey && <p className="plan-warning" role="status">{t(plan.warningKey)}</p>}
     </div>
   );
@@ -94,13 +103,14 @@ export function ActualSummary({ actual }) {
   if (!actual) return null;
   return (
     <div className="actual-line">
-      <span className="actual-label">{t('plan.actual')}:</span>
+      <span className="actual-label">{t('plan.actual')}</span>
       <span className="actual-values">
         {[
           actual.containerLabel,
           actual.size ? formatSize(actual.size) : null,
           actual.durationSec > 0 ? formatDuration(actual.durationSec) : null,
           actual.videoEncoderLabel,
+          actual.audioEncoderLabel,
           actual.width ? `${actual.width}×${actual.height}` : null,
           actual.bitrate > 0 ? formatBitrate(actual.bitrate) : null
         ].filter(Boolean).join(' · ')}

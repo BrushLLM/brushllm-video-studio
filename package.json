@@ -6,6 +6,10 @@
   "author": "BrushLLM",
   "license": "MIT",
   "main": "electron/main.js",
+  "exports": {
+    ".": "./electron/main.js",
+    "./media": "./shared/media.cjs"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "node scripts/dev.mjs",

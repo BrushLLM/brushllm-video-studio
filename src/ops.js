@@ -38,7 +38,7 @@ export const OPS = [
         { value: 'bitrate', labelKey: 'param.bitrateMode' }
       ], default: 'crf', advanced: true },
       { key: 'crf', type: 'slider', min: 14, max: 34, step: 1, default: 20, hint: true, advanced: true, showIf: (p) => p.mode !== 'bitrate' },
-      { key: 'videoBitrate', type: 'bitrate', default: 2500, min: 100, max: 100000, advanced: true, showIf: (p) => p.mode === 'bitrate' },
+      { key: 'videoBitrate', type: 'bitrate', default: 2500, advanced: true, showIf: (p) => p.mode === 'bitrate' },
       { key: 'encodeSpeed', type: 'select', options: ['slow', 'medium', 'fast'], default: 'fast', optionLabelKeys: { slow: 'param.speedSlow', medium: 'param.speedMedium', fast: 'param.speedFast' }, advanced: true },
       { key: 'audioCodec', type: 'select', options: ['auto', 'copy', 'aac', 'mp3', 'opus'], default: 'auto', optionLabelKeys: { auto: 'param.audioAuto', copy: 'param.original' }, advanced: true },
       { key: 'audioBitrate', type: 'select', options: BITRATES, default: '160', advanced: true }
@@ -59,7 +59,7 @@ export const OPS = [
         { value: 'bitrate', labelKey: 'param.bitrateMode' }
       ], default: 'crf', advanced: true },
       { key: 'crf', type: 'slider', min: 18, max: 36, step: 1, default: 26, hint: true, advanced: true, showIf: (p) => p.mode !== 'bitrate' },
-      { key: 'videoBitrate', type: 'bitrate', default: 1500, min: 100, max: 100000, advanced: true, showIf: (p) => p.mode === 'bitrate' },
+      { key: 'videoBitrate', type: 'bitrate', default: 1500, advanced: true, showIf: (p) => p.mode === 'bitrate' },
       { key: 'encodeSpeed', type: 'select', options: ['slow', 'medium', 'fast'], default: 'fast', optionLabelKeys: { slow: 'param.speedSlow', medium: 'param.speedMedium', fast: 'param.speedFast' }, advanced: true },
       { key: 'audioBitrate', type: 'select', options: ['96', '128', '160', '192'], default: '128', advanced: true }
     ]

@@ -71,7 +71,7 @@ test('every t(...) key used in the renderer exists in the locale tables', () => 
   // Validation issue codes, composed as t(`validation.${code}`) in ToolPage.
   for (const code of ['positive-number', 'invalid-time', 'invalid-time-range', 'outside-duration',
     'even-dimension', 'crop-bounds', 'crop-offset', 'speed-range', 'sample-rate', 'channels',
-    'opus-sample-rate', 'opus-bitrate', 'ambiguous-streams']) {
+    'opus-sample-rate', 'opus-bitrate', 'ambiguous-streams', 'merge-copy-incompatible', 'bitrate-range']) {
     used.add(`validation.${code}`);
   }
 

@@ -68,6 +68,7 @@ function makeMock() {
       },
       summary: SAMPLE_PROBE
     }),
+    previewFrame: async () => { throw new Error('A local video is required'); },
     addJobs: async (specs) => specs.map((spec) => {
       const id = `mock-${++seq}`;
       const base = spec.inputs[0].replace(/\.[^.]+$/, '');
@@ -185,11 +186,8 @@ function makeMock() {
     removeJob: async (id) => { jobs.delete(id); listeners.removed.forEach((cb) => cb(id)); return true; },
     revealPath: async () => true,
     openExternal: async (url) => { window.open(url, '_blank'); return true; },
-    subtitleConvert: async (filePath, targetFormat, sourceCharset) => ({
-      outputPath: filePath.replace(/\.[^.]+$/, `.${targetFormat}`), cueCount: 42, fromFormat: 'vtt', charset: 'utf-8'
-    }),
-    subtitleShift: async (filePaths, offsetMs, overwrite, sourceCharset) => filePaths.map((p) => ({ input: p, outputPath: p, cueCount: 42 })),
-    subtitleReencode: async (filePaths, charset, overwrite, sourceCharset) => filePaths.map((p) => ({ input: p, outputPath: p, fromCharset: sourceCharset || 'auto' })),
+    processSubtitles: async ({ inputs }) => inputs.map((input) => ({ input, outputPath: input })),
+    onEngineUpdated: () => () => {},
     onJobsUpdated: (cb) => { listeners.updated.push(cb); return () => { listeners.updated = listeners.updated.filter((x) => x !== cb); }; },
     onJobsRemoved: (cb) => { listeners.removed.push(cb); return () => { listeners.removed = listeners.removed.filter((x) => x !== cb); }; }
   };

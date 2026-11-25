@@ -1,44 +1,37 @@
 import { useI18n } from '../i18n';
 import { Icon } from './icons';
 
-// Operation cards grouped by category — no wall of a dozen narrow cards.
 export default function OperationGrid({ ops, selected, onSelect }) {
   const { t } = useI18n();
-  const groups = [];
+  const groups = new Map();
   for (const op of ops) {
-    const g = op.group || 'other';
-    if (!groups.length || groups[groups.length - 1].name !== g) {
-      groups.push({ name: g, ops: [] });
-    }
-    groups[groups.length - 1].ops.push(op);
+    if (op.modal) continue;
+    const group = op.group || 'other';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(op);
   }
-
-  const section = ops[0]?.section || 'video';
+  const modalTools = ops.filter((op) => op.modal);
 
   return (
-    <div className="op-groups">
-      {groups.map((group) => (
-        <section key={group.name} className="op-group">
-          <div className="op-group-label">{t(`group.${group.name}`)}</div>
-          <div className={`op-grid domain-${section}`}>
-            {group.ops.map((op) => (
-              <button
-                key={op.id}
-                type="button"
-                className={`op-card${selected === op.id ? ' selected' : ''}`}
-                aria-pressed={selected === op.id}
-                onClick={() => onSelect(op.id)}
-              >
-                <div className="op-icon"><Icon name={op.icon} size={17} /></div>
-                <div className="op-body">
-                  <div className="op-name">{t(op.id)}</div>
-                  <div className="op-desc">{t(`${op.id}.desc`)}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
+    <section className="tool-picker" aria-labelledby="tool-picker-title">
+      <h2 className="section-title" id="tool-picker-title">{t('section.tools')}</h2>
+      <div className="tool-picker-controls">
+        <select
+          className="field tool-select" value={selected} aria-labelledby="tool-picker-title"
+          onChange={(e) => onSelect(e.target.value)}
+        >
+          {[...groups].map(([name, options]) => (
+            <optgroup key={name} label={t(`group.${name}`)}>
+              {options.map((op) => <option key={op.id} value={op.id}>{t(op.id)}</option>)}
+            </optgroup>
+          ))}
+        </select>
+        {modalTools.map((op) => (
+          <button key={op.id} type="button" className="btn btn-secondary" aria-haspopup="dialog" onClick={() => onSelect(op.id)}>
+            <Icon name={op.icon} size={16} /> {t(op.id)}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }

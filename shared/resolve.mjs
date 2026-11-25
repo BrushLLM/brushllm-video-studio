@@ -1,7 +1,7 @@
 // Effective encoding for filterless transcodes ONLY. Other operations own their
 // stream mappings and mode semantics (merge/scale modes are not rate control).
 import contract from './media-contract.json' with { type: 'json' };
-import { containerOfSource, videoCodecForContainer } from './media.mjs';
+import { compressionContainer, mpeg4Quality, resolveMergeMode, videoCodecForContainer } from './media.mjs';
 import { validateOperation } from './validation.mjs';
 
 export const SUPPORTED_GPU_ENCODERS = Object.freeze([...contract.gpuEncoders]);
@@ -35,23 +35,20 @@ export function compressionGpuBitrate(preset, source) {
     : defaultKbps;
 }
 
-export function mpeg4Quality(crf) {
-  return Math.max(2, Math.min(31, Math.round(num(crf, 20) * 29 / 51 + 2)));
-}
+export { mpeg4Quality };
 
 export function resolveEncoding(op, params, source, opts = {}) {
   const p = params || {};
   if (!['video.convert', 'video.compress'].includes(op)) return { passthrough: true, hw: false, cpuNote: false };
   const errors = validateOperation(op, p, source);
   if (errors.length) return { error: errors[0].message, issues: errors };
-  const sourceContainer = containerOfSource(source || {});
   const container = op === 'video.compress'
-    ? (contract.containers[sourceContainer] ? sourceContainer : 'mp4')
+    ? compressionContainer(source || {})
     : p.container || 'mp4';
-  if (!contract.containers[container]) return { error: `Unsupported output container: ${container}` };
+  if (!Object.hasOwn(contract.containers, container)) return { error: `Unsupported output container: ${container}` };
   const srcFamily = ['h264', 'hevc', 'vp8', 'vp9', 'av1', 'mpeg4'].includes(source?.video?.codec) ? source.video.codec : 'h264';
   let videoCodec = p.videoCodec || (op === 'video.compress' ? srcFamily : 'h264');
-  if (!contract.videoEncoders[videoCodec]) return { error: `Unsupported video encoder: ${videoCodec}` };
+  if (!Object.hasOwn(contract.videoEncoders, videoCodec)) return { error: `Unsupported video encoder: ${videoCodec}` };
   const strategy = p.hwStrategy || 'auto';
   if (!['auto', 'cpu', 'gpu'].includes(strategy)) return { error: 'Unsupported hardware strategy' };
   if (strategy === 'cpu') videoCodec = family(videoCodec);
@@ -100,7 +97,7 @@ export function resolveEncoding(op, params, source, opts = {}) {
   if (audioCodec === 'auto' || audioCodec === 'copy') audioCodec = canCopy ? 'copy' : defaults[container];
   else {
     const canonical = contract.audioFormats[audioCodec]?.codec || audioCodec;
-    if (!contract.audioEncoders[audioCodec]) return { error: `Unsupported audio encoder: ${audioCodec}` };
+    if (!Object.hasOwn(contract.audioEncoders, audioCodec)) return { error: `Unsupported audio encoder: ${audioCodec}` };
     if (!COPYABLE_AUDIO[container].includes(canonical)) {
       if (container === 'mov') return { error: `MOV does not support ${canonical}; choose a compatible audio codec` };
       audioCodec = defaults[container];
@@ -121,4 +118,16 @@ export function applyResolved(params, resolved) {
   if (resolved.error) throw new Error(resolved.error);
   const { container, videoCodec, audioCodec, mode, crf, qscale, videoBitrate, encodeSpeed, audioBitrate } = resolved;
   return { ...params, container, videoCodec, audioCodec, mode, crf, qscale, videoBitrate, encodeSpeed, audioBitrate };
+}
+
+// Share one input decision between form feedback, output planning and execution.
+export function resolveOperation(op, params, source, opts = {}) {
+  const encoding = resolveEncoding(op, params, source, opts);
+  if (encoding.error) return encoding;
+  if (!encoding.passthrough) return { params: applyResolved(params, encoding), encoding };
+
+  const merge = op === 'video.merge' && opts.allProbes ? resolveMergeMode(params, opts.allProbes) : undefined;
+  const issues = validateOperation(op, params, source, { ...opts, merge });
+  if (issues.length) return { error: issues.map((issue) => issue.message).join('; '), issues };
+  return { params, merge };
 }

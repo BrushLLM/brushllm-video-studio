@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import en from './locales/en';
 import de from './locales/de';
 import es from './locales/es';
@@ -42,23 +42,26 @@ export function resolveSystemLocale(raw) {
 const I18nContext = createContext(null);
 
 export function I18nProvider({ children, language, systemLocale }) {
-  const [loc, setLoc] = useState('en');
+  const target = language === 'system' || !language ? resolveSystemLocale(systemLocale || navigator.language) : language;
+  const locale = Object.hasOwn(LOCALES, target) ? target : 'en';
 
   useEffect(() => {
-    const target = language === 'system' || !language ? resolveSystemLocale(systemLocale || navigator.language) : language;
-    setLoc(LOCALES[target] ? target : 'en');
-  }, [language, systemLocale]);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
-  const t = (key, vars) => {
-    const table = LOCALES[loc] || en;
-    let s = table[key] ?? en[key] ?? key;
-    if (vars) {
-      for (const [k, v] of Object.entries(vars)) s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
-    }
-    return s;
-  };
+  const value = useMemo(() => {
+    const table = LOCALES[locale];
+    const t = (key, vars) => {
+      let s = table[key] ?? en[key] ?? key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      }
+      return s;
+    };
+    return { t, locale };
+  }, [locale]);
 
-  return <I18nContext.Provider value={{ t, locale: loc }}>{children}</I18nContext.Provider>;
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n() {

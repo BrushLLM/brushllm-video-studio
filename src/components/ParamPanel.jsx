@@ -22,7 +22,7 @@ const CODEC_LABELS = {
 const GPU_SET = new Set(Object.keys(CODEC_LABELS).filter((k) => k.includes('_')));
 
 // Schema-driven parameter editor.
-export default function ParamPanel({ op, params, setParams, files, gpuEncoders = [] }) {
+export default function ParamPanel({ op, params, setParams, files, gpuEncoders = [], children }) {
   const { t } = useI18n();
   const firstVideo = files.find((f) => f.kind === 'video');
   const subStreams = firstVideo?.probe?.subtitleStreams || [];
@@ -84,7 +84,7 @@ export default function ParamPanel({ op, params, setParams, files, gpuEncoders =
         );
       case 'segmented':
         return (
-          <div key={p.key} className={`param-field${p.hint ? ' wide' : ''}`}>
+          <div key={p.key} className="param-field wide">
             <span className="param-label">{t(labelKey)}</span>
             <Segmented
               options={p.options}
@@ -98,7 +98,7 @@ export default function ParamPanel({ op, params, setParams, files, gpuEncoders =
       case 'slider':
         return (
           <SliderField
-            key={p.key} label={p.hint ? null : labelKey} hint={p.hint ? t('param.crfHint') : null}
+            key={p.key} label={labelKey} hint={p.hint ? t('param.crfHint') : null}
             min={p.min} max={p.max} step={p.step} format={p.format}
             value={params[p.key] ?? p.default}
             onChange={(v) => set(p.key, v)}
@@ -109,7 +109,6 @@ export default function ParamPanel({ op, params, setParams, files, gpuEncoders =
           <BitrateField
             key={p.key} label={labelKey}
             value={params[p.key] ?? p.default}
-            min={p.min} max={p.max}
             onChange={(v) => set(p.key, v)}
           />
         );
@@ -142,6 +141,7 @@ export default function ParamPanel({ op, params, setParams, files, gpuEncoders =
           <div key={p.key} className="param-field">
             <SwitchField
               label={labelKey}
+              attention={p.key === 'advanced'}
               value={Boolean(params[p.key])}
               onChange={(v) => set(p.key, v)}
             />
@@ -203,10 +203,13 @@ export default function ParamPanel({ op, params, setParams, files, gpuEncoders =
         : null
       : null;
 
+  if (!visible.length && !children && !containerNote) return null;
+
   return (
-    <div className="card param-panel">
+    <div className="param-panel">
       <div className="param-grid">
         {visible.map(renderParam)}
+        {children}
       </div>
       {containerNote && <div className="param-note">{containerNote}</div>}
     </div>

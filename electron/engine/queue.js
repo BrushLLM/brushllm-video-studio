@@ -6,13 +6,14 @@ const { buildJobCommands, outputExtFor } = require('./commands');
 const { prepareInputs } = require('./prepare');
 const { probe, summarize } = require('./probe');
 const { reservePath, publishFile, publishSequence, deleteArtifact } = require('./artifacts');
+const { fileKindOf, resolveMergeMode } = require('../../shared/media.cjs');
 
 const TERMINAL = new Set(['done', 'error', 'canceled']);
 const concurrencyOf = (n) => Number.isInteger(Number(n)) ? Math.max(1, Math.min(4, Number(n))) : 1;
 const canceledError = () => Object.assign(new Error('Job canceled'), { name: 'AbortError' });
 const IS_WIN = process.platform === 'win32';
-// PowerShell startup (~300ms) makes the 600ms POSIX cadence impractical.
-const WIN_CPU_INTERVAL_MS = 2000;
+const CPU_SAMPLE_INTERVAL_MS = IS_WIN ? 2000 : 1000;
+const TELEMETRY_INTERVAL_MS = 400;
 
 // Windows has no SIGSTOP. Suspend/resume the ffmpeg process via ntdll
 // (the same mechanism Process Explorer / Sysinternals use).
@@ -52,7 +53,6 @@ class JobManager extends EventEmitter {
     this.jobs = new Map();
     this.running = 0;
     this._seq = 0;
-    this._children = new Map();
     this._reserved = new Set();
     this._runs = new Set();
     this._closing = false;
@@ -60,13 +60,19 @@ class JobManager extends EventEmitter {
 
   setBinaries({ ffmpeg, ffprobe }) { this.ffmpeg = ffmpeg; this.ffprobe = ffprobe; }
   setConcurrency(n) { this.concurrency = concurrencyOf(n); this._pump(); }
-  activeCount() { return [...this.jobs.values()].filter((j) => !TERMINAL.has(j.status) || j.attempt).length; }
+  activeCount() {
+    let count = 0;
+    for (const job of this.jobs.values()) {
+      if (!TERMINAL.has(job.status) || job.attempt) count++;
+    }
+    return count;
+  }
   list() { return [...this.jobs.values()].map((j) => this._public(j)); }
 
   _public(j) {
     return {
       id: j.id, op: j.op, params: j.params, inputs: j.inputs,
-      inputNames: j.inputs.map((p) => path.basename(p)), outputPath: j.outputPath,
+      inputNames: j.inputNames, outputPath: j.outputPath,
       status: j.status, progress: j.progress, speed: j.speed, error: j.error,
       commandText: j.commandText, expectedDuration: j.expectedDuration,
       plan: j.plan, cpuPercent: j.cpuPercent || 0, actual: j.actual,
@@ -79,19 +85,33 @@ class JobManager extends EventEmitter {
 
   _emit(job) { this.emit('updated', this._public(job)); }
 
+  _emitTelemetry(job, attempt) {
+    if (job.attempt !== attempt || job.status !== 'running' || attempt.controller.signal.aborted) return;
+    const now = performance.now();
+    const previous = attempt.telemetry;
+    const progress = Math.min(99, Math.round(job.progress * 100));
+    const speed = Math.round(job.speed * 10);
+    const cpu = job.cpuPercent;
+    if (previous && (now - previous.time < TELEMETRY_INTERVAL_MS ||
+        (progress === previous.progress && speed === previous.speed && cpu === previous.cpu))) return;
+    attempt.telemetry = { time: now, progress, speed, cpu };
+    this.emit('updated', this._public(job), true);
+  }
+
   async add(spec) {
     if (this._closing) throw new Error('The application is shutting down');
     if (!spec || typeof spec.op !== 'string' || !Array.isArray(spec.inputs) || !spec.inputs.length ||
         spec.inputs.some((p) => typeof p !== 'string' || !path.isAbsolute(p)) ||
         typeof spec.outputPath !== 'string' || !path.isAbsolute(spec.outputPath)) throw new Error('Invalid job specification');
     const requestedSpec = structuredClone(spec);
-    requestedSpec.params = Object.freeze(structuredClone(spec.params || {}));
-    requestedSpec.requestedParams = spec.requestedParams ? Object.freeze(structuredClone(spec.requestedParams)) : undefined;
-    requestedSpec.inputs = Object.freeze([...spec.inputs]);
+    requestedSpec.params = Object.freeze(requestedSpec.params || {});
+    if (requestedSpec.requestedParams) Object.freeze(requestedSpec.requestedParams);
+    Object.freeze(requestedSpec.inputs);
     Object.freeze(requestedSpec);
     const job = {
       id: `job-${++this._seq}-${Date.now()}`, requestedSpec,
       op: spec.op, params: structuredClone(spec.params || {}), inputs: [...spec.inputs],
+      inputNames: spec.inputs.map((input) => path.basename(input)),
       outputPath: spec.outputPath, expectedDuration: 0, plan: spec.plan || null,
       actual: null, artifact: null, artifacts: [], attempt: null,
       status: 'queued', progress: 0, speed: 0, cpuPercent: 0, error: null,
@@ -128,8 +148,8 @@ class JobManager extends EventEmitter {
 
   pause(id) {
     const job = this.jobs.get(id);
-    const child = this._children.get(id);
-    if (job?.status !== 'running' || !child || child !== job.attempt?.child) return false;
+    const child = job?.attempt?.child;
+    if (job?.status !== 'running' || !child) return false;
     if (IS_WIN) {
       if (!child.pid || !winSuspendResume(child.pid, true)) return false;
     } else {
@@ -143,14 +163,15 @@ class JobManager extends EventEmitter {
 
   resume(id) {
     const job = this.jobs.get(id);
-    const child = this._children.get(id);
-    if (job?.status !== 'paused' || !child || child !== job.attempt?.child) return false;
+    const child = job?.attempt?.child;
+    if (job?.status !== 'paused' || !child) return false;
     if (IS_WIN) {
       if (!child.pid || !winSuspendResume(child.pid, false)) return false;
     } else {
       try { if (!child.kill('SIGCONT')) return false; } catch { return false; }
     }
     job.status = 'running';
+    job.attempt.telemetry = null;
     this._emit(job);
     return true;
   }
@@ -187,9 +208,9 @@ class JobManager extends EventEmitter {
 
   _pump() {
     if (this._closing) return;
-    while (this.running < this.concurrency) {
-      const job = [...this.jobs.values()].find((j) => j.status === 'queued' && !j.attempt);
-      if (!job) break;
+    for (const job of this.jobs.values()) {
+      if (this.running >= this.concurrency) break;
+      if (job.status !== 'queued' || job.attempt) continue;
       const attempt = { controller: new AbortController(), child: null, ffmpeg: this.ffmpeg, ffprobe: this.ffprobe, reserved: null, tmpDir: null };
       job.attempt = attempt;
       job.status = 'running';
@@ -202,7 +223,11 @@ class JobManager extends EventEmitter {
         job.error = job.status === 'error' ? error.message || String(error) : null;
         job.endedAt = Date.now();
       }).finally(() => {
-        if (attempt.tmpDir) fs.rmSync(attempt.tmpDir, { recursive: true, force: true });
+        try {
+          if (attempt.tmpDir) fs.rmSync(attempt.tmpDir, { recursive: true, force: true });
+        } catch (error) {
+          console.warn('Could not remove temporary job files', error.code || error.message);
+        }
         if (attempt.reserved) this._reserved.delete(attempt.reserved);
         if (job.attempt === attempt) job.attempt = null;
         this.running--;
@@ -216,7 +241,7 @@ class JobManager extends EventEmitter {
 
   async _run(job, attempt) {
     const { buildPlan, buildActual } = await import('../../shared/plan.mjs');
-    const { resolveEncoding, applyResolved, isGpuEncoder } = await import('../../shared/resolve.mjs');
+    const { resolveOperation, isGpuEncoder } = await import('../../shared/resolve.mjs');
     const { assertValidOperation } = await import('../../shared/validation.mjs');
     this._check(job, attempt);
     const spec = job.requestedSpec;
@@ -226,24 +251,22 @@ class JobManager extends EventEmitter {
       const stat = fs.statSync(input);
       if (!stat.isFile()) throw new Error('Input is not a regular file');
       // Text subtitles are decoded by prepareInputs, not every ffprobe build can read TTML.
-      if (/\.(srt|vtt|ass|ssa|ttml|xml|dfxp)$/i.test(input)) { probes.push(null); continue; }
+      if (fileKindOf(input) === 'subtitle') { probes.push(null); continue; }
       probes.push(summarize(await probe(attempt.ffprobe, input, { signal: attempt.controller.signal }), input));
     }
     this._check(job, attempt);
     const source = probes[0] || {};
     const requested = structuredClone(spec.requestedParams || spec.params || {});
-    const ctx = { probe: source, allProbes: probes, hasVideo: Boolean(source.video), hasAudio: Boolean(source.audio), subFormats: [] };
     const opts = { gpuEncoders: spec.gpuEncoders || [], allProbes: probes };
-    assertValidOperation(job.op, requested, source, opts);
-    let effective = requested;
-    if (spec.requestedParams) {
-      const resolved = resolveEncoding(job.op, requested, source, opts);
-      if (resolved.error) throw new Error(resolved.error);
-      effective = applyResolved(requested, resolved);
-    }
+    const resolved = spec.requestedParams ? resolveOperation(job.op, requested, source, opts) : null;
+    if (resolved?.error) throw new Error(resolved.error);
+    const merge = job.op === 'video.merge' ? resolved?.merge ?? resolveMergeMode(requested, probes) : undefined;
+    if (!resolved) assertValidOperation(job.op, requested, source, { ...opts, merge });
+    const ctx = { probe: source, allProbes: probes, merge, hasVideo: Boolean(source.video), hasAudio: Boolean(source.audio), subFormats: [] };
+    let effective = resolved?.params ?? requested;
     job.params = effective;
     job.expectedDuration = expectedDuration(job.op, effective, probes);
-    job.plan = buildPlan(job.op, effective, source, opts);
+    job.plan = buildPlan(job.op, requested, source, { ...opts, encoding: resolved?.encoding, merge });
     const frames = job.op === 'video.extractFrames';
     let desired;
     if (frames) {
@@ -285,12 +308,12 @@ class JobManager extends EventEmitter {
         const mayFallback = pass === 0 && spec.requestedParams && (requested.hwStrategy || 'auto') === 'auto' &&
           isGpuEncoder(effective.videoCodec) && /cannot create compression session|failed to (?:create|initializ)|no capable devices|hardware encoder.*(?:busy|not supported)/i.test(error.message + (error.stderr || ''));
         if (!mayFallback) throw error;
-        const resolved = resolveEncoding(job.op, { ...requested, hwStrategy: 'cpu' }, source, { ...opts, gpuEncoders: [] });
-        if (resolved.error) throw new Error(resolved.error);
-        effective = applyResolved({ ...requested, hwStrategy: 'cpu' }, resolved);
+        const fallback = resolveOperation(job.op, { ...requested, hwStrategy: 'cpu' }, source, { ...opts, gpuEncoders: [] });
+        if (fallback.error) throw new Error(fallback.error);
+        effective = fallback.params;
         job.params = effective;
         job.fallback = 'cpu';
-        job.plan = buildPlan(job.op, effective, source, { ...opts, gpuEncoders: [] });
+        job.plan = buildPlan(job.op, requested, source, { ...opts, encoding: fallback.encoding });
         if (fs.existsSync(staged)) fs.unlinkSync(staged);
         this._emit(job);
       }
@@ -342,7 +365,6 @@ class JobManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       const child = spawn(attempt.ffmpeg, step.args, { cwd: attempt.tmpDir, windowsHide: true });
       attempt.child = child;
-      this._children.set(job.id, child);
       const signal = attempt.controller.signal;
       const abort = () => child.kill('SIGKILL');
       signal.addEventListener('abort', abort, { once: true });
@@ -358,7 +380,7 @@ class JobManager extends EventEmitter {
         const fraction = job.expectedDuration > 0 ? Math.max(0, Math.min(1, sec / job.expectedDuration)) : 0;
         job.progress = Math.max(job.progress, Math.min(0.999, (stepIndex + fraction) / stepCount));
         if (Number.isFinite(speed)) job.speed = speed;
-        this._emit(job);
+        this._emitTelemetry(job, attempt);
       };
       let cpuSample = null;
       const cpuSampler = setInterval(() => {
@@ -370,7 +392,7 @@ class JobManager extends EventEmitter {
         // Sampling must never block the main process or overlap slow samples.
         cpuSample = execFile(command, args, { encoding: 'utf8', timeout: IS_WIN ? 3000 : 1000, windowsHide: true }, (error, stdout) => {
           cpuSample = null;
-          if (error || signal.aborted || job.status !== 'running' || job.attempt !== attempt) return;
+          if (error || attempt.child !== child || signal.aborted || job.status !== 'running' || job.attempt !== attempt) return;
           const value = parseFloat(stdout);
           if (!Number.isFinite(value)) return;
           const now = Date.now();
@@ -379,23 +401,29 @@ class JobManager extends EventEmitter {
             : value;
           lastCpuSec = value;
           lastSampleAt = now;
-          if (percent != null && percent >= 0) { job.cpuPercent = Math.round(percent); this._emit(job); }
+          if (percent != null && percent >= 0) {
+            job.cpuPercent = Math.round(percent);
+            this._emitTelemetry(job, attempt);
+          }
         });
-      }, IS_WIN ? WIN_CPU_INTERVAL_MS : 600);
+      }, CPU_SAMPLE_INTERVAL_MS);
+      let sec;
+      let speed;
       child.stdout.on('data', (data) => {
         stdoutBuf += data;
         const lines = stdoutBuf.split('\n');
         stdoutBuf = lines.pop().slice(-8192);
-        let sec = 0;
-        let speed;
-        let hasTime = false;
         for (const line of lines) {
           const time = line.match(/^out_time_(?:us|ms)=(-?\d+)/);
           const sp = line.match(/^speed=\s*([\d.]+)x/);
-          if (time) { sec = Number(time[1]) / 1e6; hasTime = true; }
-          if (sp) speed = Number(sp[1]);
+          if (time) sec = Number(time[1]) / 1e6;
+          else if (sp) speed = Number(sp[1]);
+          else if (line.startsWith('progress=')) {
+            if (sec !== undefined) report(sec, speed);
+            sec = undefined;
+            speed = undefined;
+          }
         }
-        if (hasTime) report(sec, speed);
       });
       child.stderr.on('data', (data) => {
         stderr = (stderr + data.toString()).slice(-65536);
@@ -406,7 +434,6 @@ class JobManager extends EventEmitter {
         signal.removeEventListener('abort', abort);
         if (cpuSampler) clearInterval(cpuSampler);
         cpuSample?.kill();
-        if (this._children.get(job.id) === child) this._children.delete(job.id);
         if (attempt.child === child) attempt.child = null;
         if (signal.aborted) return reject(canceledError());
         if (startError) return reject(startError);

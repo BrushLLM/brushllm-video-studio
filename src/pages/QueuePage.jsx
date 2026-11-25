@@ -1,230 +1,137 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { bridge } from '../lib/bridge';
-import { formatDuration } from '../lib/format';
+import { isActiveJob, isRemovableJob } from '../lib/jobStatus';
 import { Icon } from '../components/icons';
-import { ActualSummary } from '../components/MediaSummary';
 import EmptyState from '../components/EmptyState';
+import JobRow from '../components/JobRow';
 import { useModalFocus } from '../lib/useModalFocus';
 
-// One plain-language line for the most common engine failures; the raw
-// error stays available under the disclosure.
-function errorSummaryKey(raw) {
-  const s = String(raw || '');
-  if (/EACCES|EPERM|permission/i.test(s)) return 'queue.errPermission';
-  if (/ENOENT|no such file/i.test(s)) return 'queue.errMissing';
-  if (/moov atom|invalid data|demux/i.test(s)) return 'queue.errCorrupt';
-  return 'queue.errGeneric';
-}
+const FILTERS = [
+  { value: 'all', label: 'queue.all' },
+  { value: 'active', label: 'queue.active' },
+  { value: 'done', label: 'common.done' },
+  { value: 'error', label: 'queue.failed' },
+  { value: 'canceled', label: 'common.canceled' }
+];
 
-export default function QueuePage({ jobs, setJobs, platform = 'darwin', onNavigate }) {
+export default function QueuePage({ jobs, platform, onShowPreview }) {
   const { t } = useI18n();
+  const [filter, setFilter] = useState('all');
   const [toast, setToast] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null); // job pending delete confirmation
+  const [confirmation, setConfirmation] = useState(null);
   const [canPause, setCanPause] = useState(false);
+  const toastTimer = useRef(null);
+  const queueHeading = useRef(null);
 
   useEffect(() => {
-    bridge.canPauseJobs?.().then((v) => setCanPause(Boolean(v))).catch(() => setCanPause(false));
+    bridge.canPauseJobs().then((value) => setCanPause(Boolean(value))).catch(() => setCanPause(false));
+    return () => clearTimeout(toastTimer.current);
   }, []);
 
-  const showToast = (msg, kind = 'error') => {
-    setToast({ msg, kind });
-    setTimeout(() => setToast(null), 3000);
+  const showToast = useCallback((message, kind = 'error') => {
+    setToast({ message, kind });
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3200);
+  }, []);
+  const showUnavailable = useCallback(() => showToast(t('queue.actionUnavailable')), [showToast, t]);
+  const closeConfirmation = useCallback(() => setConfirmation(null), []);
+  const requestDelete = useCallback((job) => setConfirmation({ job }), []);
+
+  const removableJobs = jobs.filter(isRemovableJob);
+  const clearFinished = async () => {
+    try {
+      const removed = await Promise.allSettled(confirmation.finishedIds.map((id) => bridge.removeJob(id)));
+      if (removed.some((result) => result.status === 'rejected' || !result.value)) showUnavailable();
+    } catch {
+      showUnavailable();
+    } finally {
+      closeConfirmation();
+    }
   };
 
-  const clearFinished = () => {
-    jobs.filter((j) => ['done', 'error', 'canceled'].includes(j.status))
-      .forEach((j) => bridge.removeJob(j.id));
-    setJobs((prev) => prev.filter((j) => !['done', 'error', 'canceled'].includes(j.status)));
-  };
-
-  const pending = jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status)).length;
-  const running = jobs.filter((j) => j.status === 'running').length;
-  const failed = jobs.filter((j) => j.status === 'error').length;
-  const revealLabel = platform === 'win32' ? t('common.revealWin') : t('common.reveal');
-  // Running jobs read as "in progress"; queued/paused read as "pending" —
-  // split counts keep the header wording honest for mixed states.
-  const headerStats = [
-    running > 0 ? t('queue.jobsRunning', { n: running }) : null,
-    pending - running > 0 ? t('queue.jobsPending', { n: pending - running }) : null,
-    failed > 0 ? t('queue.jobsFailed', { n: failed }) : null
-  ].filter(Boolean).join(' · ');
+  const counts = { all: jobs.length, active: 0, done: 0, error: 0, canceled: 0 };
+  const visibleJobs = jobs.filter((job) => {
+    const group = isActiveJob(job) ? 'active' : job.status;
+    counts[group]++;
+    return filter === 'all' || filter === group;
+  });
+  const revealLabel = t(platform === 'win32' ? 'common.revealWin' : 'common.reveal');
 
   return (
-    <div className="page-inner">
-      <div className="page-header split">
-        <div>
-          <h1><span className="domain-dot neutral" aria-hidden="true" />{t('queue.title')}</h1>
-          <p>{headerStats || t('app.tagline')}</p>
-        </div>
-        {jobs.some((j) => ['done', 'error', 'canceled'].includes(j.status)) && (
-          <button className="btn btn-secondary" onClick={clearFinished}>{t('queue.clearFinished')}</button>
+    <section className="queue-page" aria-labelledby="queue-heading">
+      <header className="queue-heading">
+        <h2 id="queue-heading" className="section-title" tabIndex={-1} ref={queueHeading}>{t('queue.title')}</h2>
+        {removableJobs.length > 0 && (
+          <button
+            type="button" className="btn btn-secondary" aria-haspopup="dialog"
+            onClick={() => setConfirmation({ finishedIds: removableJobs.map((job) => job.id) })}
+          >
+            {t('queue.clearFinished')}
+          </button>
         )}
-      </div>
+      </header>
+
+      <p className="visually-hidden" role="status" aria-atomic="true">
+        {t('queue.jobsDone', { n: counts.done })}, {t('queue.jobsFailed', { n: counts.error })}
+      </p>
 
       {!jobs.length ? (
-        <EmptyState
-          icon="queue"
-          title={t('queue.empty')}
-          sub={t('queue.emptyHint')}
-        >
-          {onNavigate && (
-            <div className="empty-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('video')}>
-                <Icon name="video" size={13} /> {t('shortcut.openVideo')}
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('audio')}>
-                <Icon name="audio" size={13} /> {t('shortcut.openAudio')}
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('subtitle')}>
-                <Icon name="subtitle" size={13} /> {t('shortcut.openSubtitle')}
-              </button>
-            </div>
-          )}
+        <EmptyState icon="queue" title={t('queue.empty')}>
+          <div className="empty-actions">
+            <button type="button" className="btn btn-secondary" onClick={onShowPreview}>
+              <Icon name="frames" size={16} /> {t('workspace.preview')}
+            </button>
+          </div>
         </EmptyState>
       ) : (
-        <div className="queue-list">
-          {jobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              t={t}
-              revealLabel={revealLabel}
-              canPause={canPause}
-              onTerminateNoop={() => showToast(t('msg.jobAlreadyFinished'))}
-              onDeleteRequest={() => setDeleteTarget(job)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="queue-filters" role="group" aria-label={t('queue.filter')}>
+            {FILTERS.map(({ value, label }) => (
+              <button key={value} type="button" className="queue-filter" aria-pressed={filter === value} onClick={() => setFilter(value)}>
+                {t(label)} <span className="filter-count">{counts[value]}</span>
+              </button>
+            ))}
+          </div>
+          {visibleJobs.length ? (
+            <div className="queue-list">
+              {visibleJobs.map((job) => (
+                <JobRow
+                  key={job.id} job={job} t={t} revealLabel={revealLabel} canPause={canPause}
+                  onUnavailable={showUnavailable} onDeleteRequest={requestDelete}
+                />
+              ))}
+            </div>
+          ) : <EmptyState icon="queue" title={t('queue.noMatching')} />}
+        </>
       )}
 
-      {deleteTarget && (
+      {confirmation?.finishedIds && (
+        <QueueConfirmDialog
+          title={t('queue.clearFinished')} confirmLabel={t('queue.clearFinished')}
+          onClose={closeConfirmation} onConfirm={clearFinished} fallbackFocus={queueHeading}
+        >
+          <p className="modal-note">{t('queue.clearSummary', { n: confirmation.finishedIds.length })}</p>
+        </QueueConfirmDialog>
+      )}
+      {confirmation?.job && (
         <DeleteConfirmModal
-          job={deleteTarget}
-          t={t}
-          onClose={() => setDeleteTarget(null)}
-          onDeleted={(msg, kind) => { setDeleteTarget(null); if (msg) showToast(msg, kind); }}
+          job={confirmation.job} onClose={closeConfirmation} fallbackFocus={queueHeading}
+          onDeleted={(message, kind) => { closeConfirmation(); if (message) showToast(message, kind); }}
         />
       )}
 
-      {toast && (
-        <div className={`toast ${toast.kind}`} role="status" aria-live="polite">{toast.msg}</div>
-      )}
-    </div>
+      {toast && <div className={`toast ${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>{toast.message}</div>}
+    </section>
   );
 }
 
-function JobCard({ job, t, revealLabel, canPause, onTerminateNoop, onDeleteRequest }) {
-  const statusKey = `common.${job.status}`;
-  const elapsed = job.endedAt && job.startedAt
-    ? (job.endedAt - job.startedAt) / 1000
-    : job.startedAt
-      ? (Date.now() - job.startedAt) / 1000
-      : 0;
-
-  const terminate = async () => {
-    const ok = await bridge.cancelJob(job.id);
-    if (!ok) onTerminateNoop();
-  };
-
-  const active = job.status === 'running' || job.status === 'queued' || job.status === 'paused';
-
-  // Progress display: unknown duration or zero progress shows the sliding
-  // indeterminate bar; running jobs never read as 100%.
-  const showPercent = job.expectedDuration > 0 && job.progress > 0;
-  const barWidth = showPercent ? `${Math.min(99, Math.round(job.progress * 100))}%` : null;
-
-  return (
-    <div className="card job-card">
-      <div className="job-head">
-        <span className={`chip ${job.status}`}>{t(statusKey)}</span>
-        <span className="job-title">
-          {t(job.op)} · {job.inputNames[0]}
-          {job.inputNames.length > 1 && ` +${job.inputNames.length - 1}`}
-        </span>
-        <div className="job-actions">
-          {job.status === 'running' && canPause && (
-            <button className="icon-btn" title={t('common.pause')} aria-label={t('common.pause')} onClick={() => bridge.pauseJob(job.id)}>
-              <Icon name="pause" size={14} />
-            </button>
-          )}
-          {job.status === 'paused' && (
-            <button className="icon-btn" title={t('common.continue')} aria-label={t('common.continue')} onClick={() => bridge.resumeJob(job.id)}>
-              <Icon name="play" size={14} />
-            </button>
-          )}
-          {active && (
-            <button className="icon-btn danger" title={t('common.terminate')} aria-label={t('common.terminate')} onClick={terminate}>
-              <Icon name="stop" size={13} />
-            </button>
-          )}
-          {(job.status === 'canceled' || job.status === 'error') && !job.settling && (
-            <button className="icon-btn" title={t('common.resume')} aria-label={t('common.resume')} onClick={() => bridge.retryJob(job.id)}>
-              <Icon name="rotate" size={14} />
-            </button>
-          )}
-          {job.status === 'done' && (
-            <>
-              {job.hasOutput && <button className="icon-btn" title={revealLabel} aria-label={revealLabel} onClick={() => bridge.revealPath(job.id)}>
-                <Icon name="folder" size={14} />
-              </button>}
-              {!job.settling && <button className="icon-btn" title={t('common.rerun')} aria-label={t('common.rerun')} onClick={() => bridge.retryJob(job.id)}>
-                <Icon name="rotate" size={14} />
-              </button>}
-            </>
-          )}
-          {!active && (
-            <button className="icon-btn danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={onDeleteRequest}>
-              <Icon name="trash" size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="job-sub">
-        <span title={job.outputPath}>{job.outputPath?.split(/[/\\]/).pop()}</span>
-        {job.status === 'running' && job.speed > 0 && <span>{job.speed.toFixed(1)}×</span>}
-        {job.status === 'running' && job.cpuPercent > 0 && (
-          <span title="CPU">CPU {job.cpuPercent}%</span>
-        )}
-        {elapsed > 0 && <span>{t('queue.elapsed')} {formatDuration(elapsed)}</span>}
-      </div>
-
-      {active && (
-        <div className="progress-track">
-          <div
-            className={`progress-fill${barWidth ? '' : ' indeterminate'}`}
-            style={barWidth ? { width: barWidth } : undefined}
-          />
-        </div>
-      )}
-
-      {(job.status === 'error' || job.status === 'canceled') && job.settling && (
-        <div className="job-error">{t('queue.finishingCancellation')}</div>
-      )}
-      {job.status === 'error' && job.error && (
-        <div className="job-error">
-          <span className="je-summary">{t(errorSummaryKey(job.error))}</span>
-          <details>
-            <summary>{t('queue.errorDetails')}</summary>
-            <div className="je-raw">{job.error}</div>
-          </details>
-        </div>
-      )}
-
-      {job.actual && <ActualSummary actual={job.actual} />}
-    </div>
-  );
-}
-
-function DeleteConfirmModal({ job, t, onClose, onDeleted }) {
+function DeleteConfirmModal({ job, onClose, onDeleted, fallbackFocus }) {
+  const { t } = useI18n();
   const [alsoDeleteFile, setAlsoDeleteFile] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const modalRef = useModalFocus(onClose);
   const hasOutput = Boolean(job.hasOutput) && job.status === 'done';
 
   const confirm = async () => {
-    setBusy(true);
     try {
       if (alsoDeleteFile && hasOutput) {
         const r = await bridge.deleteFile(job.id);
@@ -233,48 +140,84 @@ function DeleteConfirmModal({ job, t, onClose, onDeleted }) {
           return;
         }
       }
-      await bridge.removeJob(job.id);
+      if (!await bridge.removeJob(job.id)) {
+        onDeleted(t('queue.actionUnavailable'), 'error');
+        return;
+      }
       onDeleted(alsoDeleteFile && hasOutput ? t('msg.fileDeleted') : null);
+    } catch {
+      onDeleted(t('queue.actionUnavailable'), 'error');
+    }
+  };
+
+  return (
+    <QueueConfirmDialog
+      title={t('modal.deleteTitle')} confirmLabel={t('modal.confirmDelete')}
+      onClose={onClose} onConfirm={confirm} fallbackFocus={fallbackFocus}
+    >
+      <p className="modal-text"><span className="modal-file">{job.outputPath?.split(/[/\\]/).pop()}</span></p>
+      {!hasOutput && <p className="modal-note">{t('modal.deleteQueueOnly')}</p>}
+      {hasOutput && (
+        <label className="modal-check">
+          <input type="checkbox" checked={alsoDeleteFile} onChange={(e) => setAlsoDeleteFile(e.target.checked)} />
+          {t('modal.deleteFile')}
+        </label>
+      )}
+    </QueueConfirmDialog>
+  );
+}
+
+function QueueConfirmDialog({ title, confirmLabel, onClose, onConfirm, fallbackFocus, children }) {
+  const { t } = useI18n();
+  const inProgress = useRef(false);
+  const confirmed = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const close = useCallback(() => {
+    if (!inProgress.current) onClose();
+  }, [onClose]);
+  const restoreFocus = useCallback((previous) => {
+    if (confirmed.current || !previous?.isConnected || previous === document.body) return fallbackFocus.current;
+    return previous;
+  }, [fallbackFocus]);
+  const modalRef = useModalFocus(close, restoreFocus);
+
+  const confirm = async () => {
+    if (inProgress.current) return;
+    inProgress.current = true;
+    confirmed.current = true;
+    setBusy(true);
+    try {
+      await onConfirm();
     } finally {
+      inProgress.current = false;
       setBusy(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={busy ? undefined : onClose}>
+    <div className="modal-overlay" onClick={close}>
       <div
         ref={modalRef}
         className="modal modal-sm"
         role="dialog"
         aria-modal="true"
-        aria-label={t('modal.deleteTitle')}
+        aria-labelledby="queue-confirm-title"
+        aria-describedby="queue-confirm-body"
+        aria-busy={busy}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
-          <h3>{t('modal.deleteTitle')}</h3>
-          <button className="icon-btn" title={t('common.close')} aria-label={t('common.close')} onClick={onClose}>
+          <h3 id="queue-confirm-title">{title}</h3>
+          <button type="button" className="icon-btn" aria-disabled={busy} title={t('common.close')} aria-label={t('common.close')} onClick={close}>
             <Icon name="x" size={14} />
           </button>
         </div>
-        <div className="modal-body">
-          <p className="modal-text"><span className="modal-file">{job.outputPath?.split(/[/\\]/).pop()}</span></p>
-          {!hasOutput && <p className="modal-note">{t('modal.deleteQueueOnly')}</p>}
-          {hasOutput && (
-            <label className="modal-check">
-              <input
-                type="checkbox"
-                checked={alsoDeleteFile}
-                onChange={(e) => setAlsoDeleteFile(e.target.checked)}
-              />
-              {t('modal.deleteFile')}
-            </label>
-          )}
-        </div>
+        <div className="modal-body" id="queue-confirm-body"><fieldset disabled={busy}>{children}</fieldset></div>
         <div className="modal-foot">
-          <button className="btn btn-secondary" disabled={busy} onClick={onClose}>{t('common.cancel')}</button>
-          <button className="btn btn-terminate" disabled={busy} onClick={confirm}>
-            <Icon name="trash" size={12} /> {t('modal.confirmDelete')}
+          <button type="button" className="btn btn-secondary" aria-disabled={busy} onClick={close}>{t('common.cancel')}</button>
+          <button type="button" className="btn btn-terminate" aria-disabled={busy} onClick={confirm}>
+            <Icon name="trash" size={14} /> {confirmLabel}
           </button>
         </div>
       </div>

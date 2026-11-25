@@ -17,6 +17,7 @@ export const Icons = {
   subtitle: (s) => wrap(<><rect x="2.5" y="4.5" width="19" height="15" rx="2.5" /><path d="M6 15h6M14 15h4" /></>, s),
   queue: (s) => wrap(<><path d="M4 6h16M4 12h16M4 18h10" /></>, s),
   settings: (s) => wrap(<><circle cx="12" cy="12" r="3" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" /></>, s),
+  external: (s) => wrap(<><path d="M14 4h6v6m0-6-9 9M10 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4" /></>, s),
 
   convert: (s) => wrap(<><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" /></>, s),
   compress: (s) => wrap(<><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M12 8v8M8.8 12.8L12 16l3.2-3.2" /></>, s),
@@ -46,6 +47,8 @@ export const Icons = {
   up: (s) => wrap(<><path d="M12 19V5M6 11l6-6 6 6" /></>, s),
   down: (s) => wrap(<><path d="M12 5v14M6 13l6 6 6-6" /></>, s),
   folder: (s) => wrap(<><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></>, s),
+  import: (s) => wrap(<><path d="M12 3v11m-4-4 4 4 4-4M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" /></>, s),
+  arrowRight: (s) => wrap(<><path d="M4 12h15m-6-6 6 6-6 6" /></>, s),
   play: (s) => wrap(<><path d="M8 5.5v13l11-6.5z" /></>, s),
   pause: (s) => wrap(<><path d="M8.5 5.5v13M15.5 5.5v13" /></>, s),
   stop: (s) => wrap(<><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" /></>, s),

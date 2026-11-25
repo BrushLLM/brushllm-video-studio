@@ -73,6 +73,43 @@ test('merge planning uses the same full stream compatibility as command executio
   }
 });
 
+test('automatic merge copies matching multiple tracks and rejects re-encoding that would drop one', () => {
+  const first = structuredClone(source);
+  first.streams.push({ ...first.streams[1] });
+  const params = { mode: 'auto' };
+  const copied = resolve.resolveOperation('video.merge', params, first, { allProbes: [first, first] });
+  assert.equal(copied.merge.mode, 'copy');
+
+  const second = structuredClone(first);
+  second.streams[0].width *= 2;
+  const allProbes = [first, second];
+  const decision = resolve.resolveOperation('video.merge', params, first, { allProbes });
+  assert.equal(decision.issues[0].code, 'ambiguous-streams');
+  assert.match(plan.buildPlan('video.merge', params, first, { allProbes }).error, /multi-track/);
+  assert.throws(() => buildJobCommands('video.merge', params, ['/in/a.mp4', '/in/b.mp4'], '/out/merged.mp4', { allProbes }), /multi-track/);
+});
+
+test('a stale target bitrate is ignored in quality mode and validated in bitrate mode', () => {
+  const op = ops.OPS.find((item) => item.id === 'video.convert');
+  const draft = { ...ops.defaultParams(op), advanced: true, videoBitrate: 200000 };
+  const quality = ops.engineParams(op.id, draft, []);
+  assert.equal(resolve.resolveOperation(op.id, quality, source).error, undefined);
+  const bitrate = ops.engineParams(op.id, { ...draft, mode: 'bitrate' }, []);
+  assert.equal(resolve.resolveOperation(op.id, bitrate, source).issues[0].code, 'bitrate-range');
+});
+
+test('compressing an unsupported source container uses the planned MP4 extension', () => {
+  const input = '/in/source.ogv';
+  const probe = { ...source, sourcePath: input, container: 'ogg', video: { ...source.video, codec: 'theora' } };
+  const params = { hwStrategy: 'cpu', videoCodec: 'h264' };
+  const decision = resolve.resolveOperation('video.compress', params, probe);
+  const ext = outputExtFor('video.compress', decision.params, input, { probe });
+  assert.equal(ext, '.mp4');
+  assert.equal(outputExtFor('video.compress', {}, input, { probe }), ext);
+  assert.equal(plan.buildPlan('video.compress', params, probe, decision).containerLabel, 'MP4');
+  assert.equal(valueOf(buildJobCommands('video.compress', decision.params, [input], `/out/a${ext}`, { probe }).steps[0].args, '-c:v'), 'libx264');
+});
+
 test('audio processing plans, reserved extensions and commands agree for AAC, Vorbis and PCM', () => {
   for (const [codec, extension, label] of [['aac', '.m4a', 'AAC'], ['vorbis', '.ogg', 'Vorbis'], ['pcm_s16le', '.wav', 'PCM']]) {
     for (const op of ['audio.compress', 'audio.volume', 'audio.loudnorm']) {

@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('brushvs', {
   pickDirectory: () => ipcRenderer.invoke('dialog:pickDirectory'),
 
   probeFile: (filePath) => ipcRenderer.invoke('probe:file', filePath),
+  previewFrame: (filePath) => ipcRenderer.invoke('preview:frame', filePath),
 
   addJobs: (specs) => ipcRenderer.invoke('jobs:add', specs),
   listJobs: () => ipcRenderer.invoke('jobs:list'),
@@ -35,29 +36,17 @@ contextBridge.exposeInMainWorld('brushvs', {
   revealPath: (jobId) => ipcRenderer.invoke('shell:reveal', jobId),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 
-  subtitleConvert: (filePath, targetFormat, sourceCharset) => {
-    if (typeof filePath !== 'string' || typeof targetFormat !== 'string') {
-      return Promise.reject(new Error('Invalid subtitle convert parameters'));
-    }
-    return ipcRenderer.invoke('subtitle:convert', { filePath, targetFormat, sourceCharset });
-  },
-  subtitleShift: (filePaths, offsetMs, inPlace, sourceCharset) => {
-    if (!Array.isArray(filePaths) || !Number.isFinite(Number(offsetMs))) {
-      return Promise.reject(new Error('Invalid subtitle shift parameters'));
-    }
-    return ipcRenderer.invoke('subtitle:shift', { filePaths, offsetMs, inPlace, sourceCharset });
-  },
-  subtitleReencode: (filePaths, charset, inPlace, sourceCharset) => {
-    if (!Array.isArray(filePaths) || typeof charset !== 'string') {
-      return Promise.reject(new Error('Invalid subtitle reencode parameters'));
-    }
-    return ipcRenderer.invoke('subtitle:reencode', { filePaths, charset, inPlace, sourceCharset });
-  },
+  processSubtitles: (batch) => ipcRenderer.invoke('subtitle:process', batch),
 
   onJobsUpdated: (cb) => {
     const listener = (_e, job) => cb(job);
     ipcRenderer.on('jobs:updated', listener);
     return () => ipcRenderer.removeListener('jobs:updated', listener);
+  },
+  onEngineUpdated: (cb) => {
+    const listener = (_e, info) => cb(info);
+    ipcRenderer.on('engine:updated', listener);
+    return () => ipcRenderer.removeListener('engine:updated', listener);
   },
   onJobsRemoved: (cb) => {
     const listener = (_e, id) => cb(id);

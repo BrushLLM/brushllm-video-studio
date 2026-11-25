@@ -170,6 +170,8 @@ test('AVI forces MPEG-4 — resolve and commands agree', () => {
   assert.equal(r.videoCodec, 'mpeg4');
   const args = commandFor(resolve.applyResolved({ container: 'avi', videoCodec: 'h264', crf: 20, mode: 'crf' }, r));
   assert.equal(args[args.indexOf('-c:v') + 1], 'mpeg4');
+  assert.equal(args[args.indexOf('-q:v') + 1], String(r.qscale));
+  assert.ok(!args.includes('-crf'));
 });
 
 // ------------------------------------------------------------- audio auto

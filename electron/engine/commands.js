@@ -19,7 +19,10 @@ function useBitrate(codec, p) {
 }
 
 const contract = require('../../shared/media-contract.json');
-const { mergeCopyCompatibility, videoCodecForContainer, audioProcessingFormat } = require('../../shared/media.cjs');
+const {
+  containerOfPath, compressionContainer, editContainer, resolveMergeMode, videoCodecForContainer,
+  audioOutputExtension, audioProcessingFormat, mpeg4Quality
+} = require('../../shared/media.cjs');
 const VIDEO_ENCODERS = contract.videoEncoders;
 const GPU_ENCODERS = new Set(contract.gpuEncoders);
 
@@ -72,7 +75,7 @@ function isGpu(codec) {
   return GPU_ENCODERS.has(codec);
 }
 
-// q: { crf, bitrate (kbps), encodeSpeed }
+// q: { crf, qscale, bitrate (kbps), encodeSpeed }
 function videoEncodeArgs(codec, q) {
   codec = codec || 'h264';
   if (codec === 'copy') return ['-c:v', 'copy'];
@@ -108,11 +111,13 @@ function videoEncodeArgs(codec, q) {
     return args;
   }
 
-  // libx264 / libx265 / mpeg4
+  // MPEG-4 Part 2 uses a quantizer scale, while x264 and x265 use CRF.
   if (bitrateK > 0) {
     args.push('-b:v', `${Math.round(bitrateK)}k`);
+  } else if (codec === 'mpeg4') {
+    args.push('-q:v', String(num(q?.qscale, mpeg4Quality(q?.crf))));
   } else {
-    args.push('-crf', String(num(q && q.crf, 20)));
+    args.push('-crf', String(num(q?.crf, 20)));
   }
   if (codec !== 'mpeg4') args.push('-preset', X264_SPEED[speed] || 'medium');
   return args;
@@ -173,83 +178,77 @@ function concatListContent(paths) {
     .join('\n') + '\n';
 }
 
+function transcodeStep(op, params, input, out, ctx) {
+  const compress = op === 'compress';
+  const source = ctx.probe || {};
+  const container = compress
+    ? params.container || compressionContainer({ sourcePath: input, ...source })
+    : params.container || 'mp4';
+  const sourceCodec = source.video?.codec;
+  const defaultCodec = compress && ['h264', 'hevc', 'vp8', 'vp9', 'av1', 'mpeg4'].includes(sourceCodec)
+    ? sourceCodec : 'h264';
+  const videoCodec = videoCodecForContainer(container, params.videoCodec || defaultCodec);
+  const fallbackAudio = { webm: 'opus', avi: 'mp3' }[container] || 'aac';
+  let audioCodec = params.audioCodec || fallbackAudio;
+  if (audioCodec === 'auto') audioCodec = fallbackAudio;
+  if (container === 'webm' || container === 'avi') {
+    const canonical = audioCodec === 'copy' ? source.audio?.codec : AUDIO_FORMATS[audioCodec]?.codec || audioCodec;
+    if (!REENCODE_COPYABLE_AUDIO[container].includes(canonical)) audioCodec = fallbackAudio;
+  }
+  // Match the tracks used by planning while leaving subtitle selection to the muxer.
+  const skippedStreams = [
+    ...(source.audioStreams || []).slice(1),
+    ...(source.videoStreams || []).filter((stream) => stream.index !== source.video?.index)
+  ];
+  const args = [
+    '-hide_banner', '-y', ...skippedStreams.flatMap((stream) => [`-discard:${stream.index}`, 'all']), '-i', input,
+    ...videoEncodeArgs(videoCodec, {
+      crf: params.crf,
+      qscale: params.qscale,
+      bitrate: useBitrate(videoCodec, params) ? params.videoBitrate : undefined,
+      encodeSpeed: params.encodeSpeed
+    }),
+    ...audioEncodeArgs(audioCodec, params.audioBitrate || (compress ? 128 : 160)),
+    ...containerExtras(container, videoCodec),
+    out
+  ];
+  return { steps: [{ args, label: op }] };
+}
+
+function audioOutputStep(label, input, out, format, bitrate, { filter, sampleRate, channels } = {}) {
+  out = out.replace(/\.[^.]+$/, AUDIO_FORMATS[format].ext);
+  const args = ['-hide_banner', '-y', '-i', input, '-map', '0:a:0'];
+  if (filter) args.push('-af', filter);
+  args.push(...audioEncodeArgs(format, bitrate));
+  if (sampleRate) args.push('-ar', String(num(sampleRate, 44100)));
+  if (channels) args.push('-ac', String(num(channels, 2)));
+  if (format === 'm4a') args.push('-f', 'ipod');
+  if (format === 'opus') args.push('-f', 'opus');
+  args.push(out);
+  return { steps: [{ args, label }], outputPath: out };
+}
+
 // ---------------------------------------------------------------- builders
 
 const builders = {
   // ---- VIDEO ----------------------------------------------------------
 
   'video.convert'(p, inputs, out, ctx) {
-    const container = p.container || 'mp4';
-    let vCodec = p.videoCodec || 'h264';
-    let aCodec = p.audioCodec || 'aac';
-    if (aCodec === 'auto') {
-      // Defense only — production resolves 'auto' in main.js via resolve.mjs.
-      aCodec = { webm: 'opus', avi: 'mp3' }[container] || 'aac';
-    }
-    vCodec = videoCodecForContainer(container, vCodec);
-    if (container === 'webm' || container === 'avi') {
-      const srcAudio = ctx && ctx.probe && ctx.probe.audio && ctx.probe.audio.codec;
-      const canonical = aCodec === 'copy' ? srcAudio : (AUDIO_FORMATS[aCodec]?.codec || aCodec);
-      if (!REENCODE_COPYABLE_AUDIO[container].includes(canonical)) aCodec = container === 'webm' ? 'opus' : 'mp3';
-    }
-    const args = [
-      '-hide_banner', '-y',
-      '-i', inputs[0],
-      ...videoEncodeArgs(vCodec, {
-        crf: p.crf,
-        bitrate: useBitrate(vCodec, p) ? p.videoBitrate : undefined,
-        encodeSpeed: p.encodeSpeed
-      }),
-      ...audioEncodeArgs(aCodec, p.audioBitrate || 160),
-      ...containerExtras(container, vCodec),
-      ...PROGRESS_ARGS,
-      out
-    ];
-    return { steps: [{ args, label: 'convert' }] };
+    return transcodeStep('convert', p, inputs[0], out, ctx);
   },
 
   'video.compress'(p, inputs, out, ctx) {
-    // p.videoCodec is authoritative: main.js resolved it through
-    // shared/resolve.mjs (quality preset + GPU strategy) before the job
-    // entered the queue. Only fall back to the source codec family when a
-    // caller bypassed resolution (tests / direct queue use).
-    const src = (ctx.probe && ctx.probe.video && ctx.probe.video.codec) || 'h264';
-    const sourceFamily = ['h264', 'hevc', 'vp9', 'av1'].includes(src) ? src : 'h264';
-    const codec = p.videoCodec && (VIDEO_ENCODERS[p.videoCodec] || GPU_ENCODERS.has(p.videoCodec))
-      ? p.videoCodec
-      : sourceFamily;
-    const args = [
-      '-hide_banner', '-y',
-      '-i', inputs[0],
-      ...videoEncodeArgs(codec, {
-        crf: p.crf,
-        bitrate: useBitrate(codec, p) ? p.videoBitrate : undefined,
-        encodeSpeed: p.encodeSpeed
-      }),
-      ...audioEncodeArgs(p.audioCodec || 'aac', p.audioBitrate || 128),
-      ...containerExtras(containerOf(out), codec),
-      ...PROGRESS_ARGS,
-      out
-    ];
-    return { steps: [{ args, label: 'compress' }] };
+    return transcodeStep('compress', p, inputs[0], out, ctx);
   },
 
   'video.merge'(p, inputs, out, ctx) {
     const container = p.container === 'source' ? containerOf(inputs[0]) : p.container || 'mp4';
-    let mode = p.mode || 'auto';
-    if (mode === 'auto') {
-      const compatibility = mergeCopyCompatibility(ctx.allProbes || []);
-      mode = compatibility.compatible ? 'copy' : 'reencode';
-    }
-    if (mode === 'copy') {
-      // Strict copy: only when every stream parameter matches. Incomplete
-      // metadata (e.g. unit-test stubs without full probes) is rejected so a
-      // silent timeline corruption can never pass as "copy".
-      const compatibility = mergeCopyCompatibility(ctx.allProbes || []);
-      if (!compatibility.compatible) throw new Error(compatibility.reason);
+    const merge = ctx.merge ?? resolveMergeMode(p, ctx.allProbes);
+    if (merge.error) throw new Error(merge.error);
+    if (merge.mode === 'copy') {
       const args = ['-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
         '-map', '0', '-c', 'copy', ...containerExtras(container, null),
-        ...PROGRESS_ARGS, out];
+        out];
       return {
         steps: [{ args, label: 'merge' }],
         auxFiles: [{ name: 'concat.txt', content: concatListContent(inputs) }]
@@ -297,7 +296,7 @@ const builders = {
       '-force_key_frames', 'expr:gte(t,n_forced*1)',
       ...audioEncodeArgs(p.audioCodec || 'aac', p.audioBitrate || 160),
       ...containerExtras(container, p.videoCodec || 'h264'),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'merge' }] };
   },
@@ -315,7 +314,7 @@ const builders = {
         // breaks the output -t cap with stream copy (measured: a 4s request
         // produced 5.27s). Input -ss already yields non-negative timestamps.
         ...pre.outputArgs,
-        ...PROGRESS_ARGS, out
+        out
       ];
       return { steps: [{ args, label: 'trim' }] };
     }
@@ -324,7 +323,7 @@ const builders = {
       ...EDIT_ENCODE, ...reencodeAudioArgs(out, ctx),
       ...containerExtras(containerOf(out), 'h264'),
       ...pre.outputArgs,
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'trim' }] };
   },
@@ -335,7 +334,7 @@ const builders = {
       '-hide_banner', '-y', '-i', inputs[0],
       '-vf', vf, ...EDIT_ENCODE, ...reencodeAudioArgs(out, ctx),
       ...containerExtras(containerOf(out), 'h264'),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'crop' }] };
   },
@@ -354,7 +353,7 @@ const builders = {
       '-hide_banner', '-y', '-i', inputs[0],
       '-vf', vf, ...EDIT_ENCODE, ...reencodeAudioArgs(out, ctx),
       ...containerExtras(containerOf(out), 'h264'),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'scale' }] };
   },
@@ -372,7 +371,7 @@ const builders = {
       '-hide_banner', '-y', '-i', inputs[0],
       '-vf', chain.join(','), ...EDIT_ENCODE, ...reencodeAudioArgs(out, ctx),
       ...containerExtras(containerOf(out), 'h264'),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'rotate' }] };
   },
@@ -387,7 +386,7 @@ const builders = {
         '-map', '[v]', '-map', '[a]',
         ...EDIT_ENCODE, '-c:a', 'aac', '-b:a', '160k',
         ...containerExtras(containerOf(out), 'h264'),
-        ...PROGRESS_ARGS, out
+        out
       ];
       return { steps: [{ args, label: 'speed' }] };
     }
@@ -395,7 +394,7 @@ const builders = {
       '-hide_banner', '-y', '-i', inputs[0],
       '-vf', `setpts=PTS/${factor}`, ...EDIT_ENCODE,
       ...containerExtras(containerOf(out), 'h264'),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'speed' }] };
   },
@@ -405,7 +404,7 @@ const builders = {
       '-hide_banner', '-y', '-i', inputs[0],
       '-map', '0', '-c', 'copy', '-an',
       ...containerExtras(containerOf(out), null),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'mute' }] };
   },
@@ -424,31 +423,16 @@ const builders = {
         : ['-c:a', 'aac', '-b:a', `${num(p.audioBitrate, 192)}k`]),
       '-shortest',
       ...containerExtras(containerOf(out), null),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'replace-audio' }] };
   },
 
   'video.extractAudio'(p, inputs, out, ctx) {
     const format = p.format || 'copy';
-    let args;
-    if (format === 'copy') {
-      const src = (ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || '';
-      const map = { aac: '.m4a', mp3: '.mp3', flac: '.flac', opus: '.opus', vorbis: '.ogg' };
-      const ext = map[src] || '.mka';
-      out = out.replace(/\.[^.]+$/, ext);
-      args = ['-hide_banner', '-y', '-i', inputs[0], '-vn', '-c:a', 'copy'];
-    } else {
-      const f = AUDIO_FORMATS[format];
-      out = out.replace(/\.[^.]+$/, f.ext);
-      args = [
-        '-hide_banner', '-y', '-i', inputs[0], '-vn',
-        ...audioEncodeArgs(format, num(p.bitrate, 192))
-      ];
-      if (format === 'm4a') args.push('-f', 'ipod');
-      if (format === 'opus') args.push('-f', 'opus');
-    }
-    args.push(...PROGRESS_ARGS, out);
+    if (format !== 'copy') return audioOutputStep('extract-audio', inputs[0], out, format, num(p.bitrate, 192));
+    out = out.replace(/\.[^.]+$/, audioOutputExtension(ctx.probe?.audio?.codec));
+    const args = ['-hide_banner', '-y', '-i', inputs[0], '-map', '0:a:0', '-c:a', 'copy', out];
     return { steps: [{ args, label: 'extract-audio' }], outputPath: out };
   },
 
@@ -458,12 +442,12 @@ const builders = {
     if (p.mode === 'single') {
       args.push('-ss', secToTime(num(p.timeSec, 0)), '-i', inputs[0], '-frames:v', '1');
       if (format === 'jpg') args.push('-q:v', '2');
-      args.push(...PROGRESS_ARGS, `${out}.${format}`);
+      args.push(`${out}.${format}`);
       return { steps: [{ args, label: 'frame' }], outputPath: `${out}.${format}` };
     }
     args.push('-i', inputs[0], '-vf', `fps=${num(p.fps, 1)}`);
     if (format === 'jpg') args.push('-q:v', '2');
-    args.push(...PROGRESS_ARGS, `${out}_%05d.${format}`);
+    args.push(`${out}_%05d.${format}`);
     return { steps: [{ args, label: 'frames' }], outputPath: `${out}_%05d.${format}` };
   },
 
@@ -479,7 +463,7 @@ const builders = {
         '-c:v', 'libwebp_anim', '-quality', String(num(p.quality, 75)),
         '-loop', num(p.loop, 0), '-an',
         ...pre.outputArgs,
-        ...PROGRESS_ARGS, out
+        out
       ];
       return { steps: [{ args, label: 'webp' }] };
     }
@@ -487,13 +471,13 @@ const builders = {
     const pass1 = [
       '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0],
       '-vf', `${scale},palettegen=max_colors=${num(p.colors, 128)}`,
-      '-an', ...pre.outputArgs, ...PROGRESS_ARGS, 'palette.png'
+      '-an', ...pre.outputArgs, 'palette.png'
     ];
     const pass2 = [
       '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0], '-i', 'palette.png',
       '-filter_complex',
       `[0:v]${scale}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4`,
-      '-an', ...pre.outputArgs, ...PROGRESS_ARGS, out
+      '-an', ...pre.outputArgs, out
     ];
     return { steps: [{ args: pass1, label: 'palette' }, { args: pass2, label: 'gif' }] };
   },
@@ -513,7 +497,7 @@ const builders = {
     (p.languages || []).forEach((lang, i) => {
       if (lang) args.push(`-metadata:s:s:${i}`, `language=${lang}`);
     });
-    args.push(...containerExtras(container, null), ...PROGRESS_ARGS, out);
+    args.push(...containerExtras(container, null), out);
     return { steps: [{ args, label: 'embed-subs' }] };
   },
 
@@ -530,7 +514,7 @@ const builders = {
       '-hide_banner', '-y', '-i', inputs[0],
       '-vf', filter, ...EDIT_ENCODE, ...reencodeAudioArgs(out, ctx),
       ...containerExtras(containerOf(out), 'h264'),
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'burn-subs' }] };
   },
@@ -560,7 +544,7 @@ const builders = {
         args.push('-sn');
       }
     }
-    args.push(...PROGRESS_ARGS, out);
+    args.push(out);
     return { steps: [{ args, label: 'remux' }] };
   },
 
@@ -571,75 +555,34 @@ const builders = {
   // ---- AUDIO ------------------------------------------------------------
 
   'audio.convert'(p, inputs, out) {
-    const format = p.format || 'mp3';
-    const f = AUDIO_FORMATS[format];
-    out = out.replace(/\.[^.]+$/, f.ext);
-    const args = [
-      '-hide_banner', '-y', '-i', inputs[0], '-vn',
-      ...audioEncodeArgs(format, num(p.bitrate, 192))
-    ];
-    if (p.sampleRate) args.push('-ar', String(num(p.sampleRate, 44100)));
-    if (p.channels) args.push('-ac', String(num(p.channels, 2)));
-    if (format === 'm4a') args.push('-f', 'ipod');
-    if (format === 'opus') args.push('-f', 'opus');
-    args.push(...PROGRESS_ARGS, out);
-    return { steps: [{ args, label: 'convert' }], outputPath: out };
+    return audioOutputStep('convert', inputs[0], out, p.format || 'mp3', num(p.bitrate, 192), {
+      sampleRate: p.sampleRate, channels: p.channels
+    });
   },
 
   'audio.compress'(p, inputs, out, ctx) {
-    const src = (ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || 'mp3';
-    const format = audioProcessingFormat(src);
-    const f = AUDIO_FORMATS[format];
-    out = out.replace(/\.[^.]+$/, f.ext);
-    const args = [
-      '-hide_banner', '-y', '-i', inputs[0], '-vn',
-      ...audioEncodeArgs(format, num(p.bitrate, 128))
-    ];
-    if (format === 'm4a') args.push('-f', 'ipod');
-    if (format === 'opus') args.push('-f', 'opus');
-    args.push(...PROGRESS_ARGS, out);
-    return { steps: [{ args, label: 'compress' }], outputPath: out };
+    return audioOutputStep('compress', inputs[0], out, audioProcessingFormat(ctx.probe?.audio?.codec), num(p.bitrate, 128));
   },
 
   'audio.trim'(p, inputs, out) {
     const pre = trimArgs(p);
     const args = [
       '-hide_banner', '-y', ...pre.inputArgs, '-i', inputs[0],
-      '-c:a', 'copy', ...pre.outputArgs, ...PROGRESS_ARGS, out
+      '-c:a', 'copy', ...pre.outputArgs, out
     ];
     return { steps: [{ args, label: 'trim' }] };
   },
 
   'audio.volume'(p, inputs, out, ctx) {
-    const src = (ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || 'mp3';
-    const format = audioProcessingFormat(src);
-    const f = AUDIO_FORMATS[format];
-    out = out.replace(/\.[^.]+$/, f.ext);
-    const args = [
-      '-hide_banner', '-y', '-i', inputs[0], '-vn',
-      '-af', `volume=${num(p.db, 0)}dB`,
-      ...audioEncodeArgs(format, num(p.bitrate, 192))
-    ];
-    if (format === 'm4a') args.push('-f', 'ipod');
-    if (format === 'opus') args.push('-f', 'opus');
-    args.push(...PROGRESS_ARGS, out);
-    return { steps: [{ args, label: 'volume' }], outputPath: out };
+    return audioOutputStep('volume', inputs[0], out, audioProcessingFormat(ctx.probe?.audio?.codec), num(p.bitrate, 192), {
+      filter: `volume=${num(p.db, 0)}dB`
+    });
   },
 
   'audio.loudnorm'(p, inputs, out, ctx) {
-    const src = (ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || 'mp3';
-    const format = audioProcessingFormat(src);
-    const f = AUDIO_FORMATS[format];
-    out = out.replace(/\.[^.]+$/, f.ext);
-    const args = [
-      '-hide_banner', '-y', '-i', inputs[0], '-vn',
-      '-af', `loudnorm=I=${num(p.target, -16)}:TP=${num(p.tp, -1.5)}:LRA=${num(p.lra, 11)}`,
-      ...audioEncodeArgs(format, num(p.bitrate, 192))
-    ];
-    if (format === 'm4a') args.push('-f', 'ipod');
-    if (format === 'opus') args.push('-f', 'opus');
-    args.push(...PROGRESS_ARGS, out);
-    return { steps: [{ args, label: 'loudnorm' }], outputPath: out };
+    return audioOutputStep('loudnorm', inputs[0], out, audioProcessingFormat(ctx.probe?.audio?.codec), num(p.bitrate, 192), {
+      filter: `loudnorm=I=${num(p.target, -16)}:TP=${num(p.tp, -1.5)}:LRA=${num(p.lra, 11)}`
+    });
   },
 
   'subtitle.extract'(p, inputs, out) {
@@ -650,16 +593,14 @@ const builders = {
       '-hide_banner', '-y', '-i', inputs[0],
       '-map', `0:s:${num(p.streamIndex, 0)}`,
       '-c:s', encMap[format],
-      ...PROGRESS_ARGS, out
+      out
     ];
     return { steps: [{ args, label: 'extract-subs' }], outputPath: out };
   }
 };
 
 function containerOf(filePath) {
-  const ext = (filePath.match(/\.([^.]+)$/) || [])[1]?.toLowerCase();
-  const map = { mp4: 'mp4', m4v: 'mp4', mkv: 'mkv', webm: 'webm', mov: 'mov', avi: 'avi' };
-  return map[ext] || 'mp4';
+  return containerOfPath(filePath) || 'mp4';
 }
 
 // Maximum threading for EVERY ffmpeg invocation — always on.
@@ -698,8 +639,8 @@ function injectThreading(args, videoWidth = 0) {
 }
 
 function buildJobCommands(op, params, inputs, outputPath, ctx) {
+  if (!Object.hasOwn(builders, op)) throw new Error(`Unknown op: ${op}`);
   const builder = builders[op];
-  if (!builder) throw new Error(`Unknown op: ${op}`);
   const result = builder(params || {}, inputs, outputPath, ctx || {});
   if (result) {
     result.op = op;
@@ -707,7 +648,7 @@ function buildJobCommands(op, params, inputs, outputPath, ctx) {
     for (const step of result.steps) {
       // Threading optimizations are always on — x264 is auto-threaded anyway,
       // and the VP9/decoder/filter knobs are pure wins with no quality cost.
-      step.args = injectThreading(step.args, videoWidth);
+      step.args = injectThreading([...PROGRESS_ARGS, ...step.args], videoWidth);
       step.commandText = step.args.join(' ');
     }
   }
@@ -727,13 +668,12 @@ function outputExtFor(op, params, inputPath, ctx) {
     case 'video.embedSubs':
     case 'video.remux':
       return CONTAINERS[params.container] ? CONTAINERS[params.container].ext : `.${inputExt}`;
+    case 'video.compress':
+      return (CONTAINERS[params.container] || CONTAINERS[compressionContainer({ sourcePath: inputPath, ...ctx?.probe })]).ext;
     case 'video.anim':
       return params.format === 'webp' ? '.webp' : '.gif';
     case 'video.extractAudio':
-      if (params.format === 'copy') {
-        const src = (ctx && ctx.probe && ctx.probe.audio && ctx.probe.audio.codec) || '';
-        return { aac: '.m4a', mp3: '.mp3', flac: '.flac', opus: '.opus', vorbis: '.ogg' }[src] || '.mka';
-      }
+      if (!params.format || params.format === 'copy') return audioOutputExtension(ctx?.probe?.audio?.codec);
       return (AUDIO_FORMATS[params.format] || { ext: '.mp3' }).ext;
     case 'audio.convert':
       return (AUDIO_FORMATS[params.format] || { ext: '.mp3' }).ext;
@@ -745,7 +685,7 @@ function outputExtFor(op, params, inputPath, ctx) {
       return `.${params.format || 'srt'}`;
     default: {
       const reencoding = REENCODE_OPS.has(op) || (op === 'video.trim' && params.precise);
-      if (reencoding && !['mp4', 'mkv', 'mov'].includes(containerOf(inputPath))) {
+      if (reencoding && editContainer({ sourcePath: inputPath }) !== containerOfPath(inputPath)) {
         return '.mp4';
       }
       return `.${inputExt}`;

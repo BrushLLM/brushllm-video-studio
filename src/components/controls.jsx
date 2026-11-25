@@ -1,3 +1,5 @@
+import { useId } from 'react';
+import { VIDEO_BITRATE_RANGE, videoBitrateIssue } from '../../shared/validation.mjs';
 import { useI18n } from '../i18n';
 import { Icon } from './icons';
 
@@ -50,7 +52,7 @@ export function SliderField({ label, value, min, max, step, onChange, format, hi
   );
 }
 
-export function SwitchField({ label, value, onChange }) {
+export function SwitchField({ label, value, onChange, attention = false }) {
   const { t } = useI18n();
   const text = label ? t(label) : undefined;
   return (
@@ -61,7 +63,7 @@ export function SwitchField({ label, value, onChange }) {
         role="switch" aria-checked={value} aria-label={text}
         onClick={() => onChange(!value)}
       />
-      {text && <span className="param-label">{text}</span>}
+      {text && <span className={attention ? 'param-label attention-label' : 'param-label'}>{text}</span>}
     </div>
   );
 }
@@ -107,23 +109,25 @@ export function NumberField({ label, value, onChange, min, max, step, placeholde
 
 // Bitrate input: kbps number with unit suffix and range validation.
 // The engine always receives kbps; "1500" can never mean 1500 bit/s.
-export function BitrateField({ label, value, onChange, min = 100, max = 100000 }) {
+export function BitrateField({ label, value, onChange }) {
   const { t } = useI18n();
-  const n = Number(value);
-  const invalid = value !== '' && value != null && (!isFinite(n) || n < min || n > max);
+  const errorId = useId();
+  const { min, max } = VIDEO_BITRATE_RANGE;
+  const issue = videoBitrateIssue(value);
   return (
     <div className="param-field">
       {label && <span className="param-label">{t(label)} <span className="unit">({t('unit.kbps')})</span></span>}
-      <div className={`bitrate-row${invalid ? ' invalid' : ''}`}>
+      <div className={`bitrate-row${issue ? ' invalid' : ''}`}>
         <input
           className="field" type="number" value={value ?? ''}
           min={min} max={max} step={1}
           aria-label={label ? `${t(label)} (${t('unit.kbps')})` : undefined}
+          aria-invalid={Boolean(issue)} aria-describedby={issue ? errorId : undefined}
           onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
         />
         <span className="unit-suffix">{t('unit.kbps')}</span>
       </div>
-      {invalid && <span className="param-hint error">{t('param.bitrateRange', { min, max })}</span>}
+      {issue && <span id={errorId} className="param-hint error">{t('validation.bitrate-range', issue.params)}</span>}
     </div>
   );
 }
@@ -160,20 +164,20 @@ export function TimeField({ label, value, onChange }) {
 // Four user-facing quality presets (normal mode of format conversion).
 export function PresetCards({ value, onChange }) {
   const { t } = useI18n();
+  const groupName = useId();
   const presets = ['compat', 'balanced', 'quality', 'small'];
   return (
     <div className="preset-grid" role="radiogroup" aria-label={t('param.quality')}>
       {presets.map((p) => (
-        <button
-          key={p} type="button"
+        <label
+          key={p}
           className={`preset-card${value === p ? ' selected' : ''}`}
-          role="radio" aria-checked={value === p}
-          onClick={() => onChange(p)}
         >
+          <input type="radio" className="preset-input" name={groupName} value={p} checked={value === p} onChange={() => onChange(p)} />
           <span className="preset-name">{t(`preset.${p}`)}</span>
           <span className="preset-desc">{t(`preset.${p}.desc`)}</span>
           <span className="preset-check" aria-hidden="true"><Icon name="check" size={13} /></span>
-        </button>
+        </label>
       ))}
     </div>
   );

@@ -68,11 +68,10 @@ export default function SettingsPage({ settings, setSettings }) {
   const enginePath = ffmpegPath || info?.ffmpegPath || '';
 
   return (
-    <div className="page-inner">
-      <div className="page-header">
-        <h1>{t('settings.title')}</h1>
-        <p>{t('app.tagline')}</p>
-      </div>
+    <div className="page-inner settings-page">
+      <header className="page-header">
+        <h1 id="workspace-title">{t('settings.title')}</h1>
+      </header>
 
       <div className="card settings-group">
         <h2>{t('settings.general')}</h2>
@@ -81,7 +80,7 @@ export default function SettingsPage({ settings, setSettings }) {
             <div className="setting-label">{t('settings.language')}</div>
             <div className="setting-hint">{t('settings.languageHint')}</div>
           </div>
-          <select className="field" value={settings.language || 'system'} onChange={(e) => update({ language: e.target.value })}>
+          <select className="field" aria-label={t('settings.language')} value={settings.language || 'system'} onChange={(e) => update({ language: e.target.value })}>
             {LANGUAGES.map((l) => (
               <option key={l.value} value={l.value}>
                 {l.value === 'system' ? t('settings.systemLanguage') : l.label}
@@ -118,12 +117,13 @@ export default function SettingsPage({ settings, setSettings }) {
             <div className="setting-label">{t('settings.concurrency')}</div>
             <div className="setting-hint">{t('settings.concurrencyHint')}</div>
           </div>
-          <div className="segmented">
+          <div className="segmented" role="group" aria-label={t('settings.concurrency')}>
             {[1, 2, 3].map((n) => (
               <button
                 key={n}
                 type="button"
-                className={String(settings.concurrency || 1) === String(n) ? 'active' : ''}
+                className={(settings.concurrency || 1) === n ? 'active' : ''}
+                aria-pressed={(settings.concurrency || 1) === n}
                 onClick={() => update({ concurrency: n })}
               >
                 {n}

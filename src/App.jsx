@@ -1,84 +1,57 @@
-import { useEffect, useRef, useState } from 'react';
-import { I18nProvider, useI18n } from './i18n';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { I18nProvider } from './i18n';
 import { bridge } from './lib/bridge';
 import { filterForSection } from '../shared/media.mjs';
 import { createHistory, push, back, forward, current } from './lib/navhistory.js';
 import ToolPage from './components/ToolPage';
-import QueuePage from './pages/QueuePage';
+import StudioHeader from './components/StudioHeader';
 import SettingsPage from './pages/SettingsPage';
-import { Icon } from './components/icons';
-import brandLogo from './assets/brand.png';
+import { JobQueue } from './lib/jobQueue';
 
-const NAV = [
-  { id: 'video', icon: 'video' },
-  { id: 'audio', icon: 'audio' },
-  { id: 'subtitle', icon: 'subtitle' },
-  { id: 'queue', icon: 'queue' },
-  { id: 'settings', icon: 'settings' }
-];
-
-// Shell lives INSIDE the I18nProvider so useI18n works.
-function Shell({ settings, setSettings, jobs, setJobs, page, setPage, filesBySection, setSectionFiles, transfer, gpuEncoders, platform }) {
-  const { t } = useI18n();
+const Shell = memo(function Shell({ settings, setSettings, page, setPage, filesBySection, setSectionFiles, transfer, gpuEncoders, platform }) {
   const toolDrafts = useRef({});
-  // Same definition as QueuePage's pending count — paused jobs are still in flight.
-  const pending = jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status)).length;
-  const failed = jobs.filter((j) => j.status === 'error').length;
+  const workspace = useRef(null);
+  const moveFocus = useRef(false);
+
+  useLayoutEffect(() => {
+    if (moveFocus.current) {
+      moveFocus.current = false;
+      workspace.current.focus({ preventScroll: true });
+    }
+  }, [page]);
+
+  const navigateFromWorkspace = useCallback((navigate) => {
+    moveFocus.current = true;
+    navigate();
+  }, []);
+  const setFiles = useCallback((updater) => setSectionFiles(page, updater), [page, setSectionFiles]);
+  const transferFiles = useCallback((target) => navigateFromWorkspace(() => transfer(target)), [navigateFromWorkspace, transfer]);
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <img className="brand-mark" src={brandLogo} alt="BrushLLM Video Studio" draggable={false} />
-          <div>
-            <div className="brand-name">{t('app.name')}</div>
-            <div className="brand-tag">{t('app.tagline')}</div>
-          </div>
-        </div>
-        <nav className="nav">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              className={`nav-item${page === item.id ? ' active' : ''}`}
-              aria-current={page === item.id ? 'page' : undefined}
-              onClick={() => setPage(item.id)}
-            >
-              <Icon name={item.icon} size={16} />
-              {t(`nav.${item.id}`)}
-              {item.id === 'queue' && pending > 0 && <span className="nav-badge">{pending}</span>}
-              {item.id === 'queue' && failed > 0 && <span className="nav-badge danger">{failed}</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <button
-            className="footer-link"
-            onClick={() => bridge.openExternal('https://brushllm.com')}
-            title="BrushLLM.com"
-          >
-            BrushLLM.com
-          </button>
-        </div>
-      </aside>
-      <main className="content">
-        {['video', 'audio', 'subtitle'].includes(page) && (
+    <div className="app" data-platform={platform}>
+      <StudioHeader page={page} onNavigate={setPage} />
+      <main className="workspace" ref={workspace} tabIndex={-1} aria-labelledby="workspace-title">
+        {['video', 'audio', 'subtitle'].includes(page) ? (
           <ToolPage
             key={page}
             section={page}
             files={filesBySection[page]}
-            setFiles={(updater) => setSectionFiles(page, updater)}
-            onTransfer={transfer}
+            setFiles={setFiles}
+            onTransfer={transferFiles}
+            platform={platform}
             gpuEncoders={gpuEncoders}
             defaultOutputDir={settings.outputDir || ''}
             drafts={toolDrafts.current}
           />
+        ) : (
+          <div className="content">
+            <SettingsPage settings={settings} setSettings={setSettings} />
+          </div>
         )}
-        {page === 'queue' && <QueuePage jobs={jobs} setJobs={setJobs} platform={platform} onNavigate={setPage} />}
-        {page === 'settings' && <SettingsPage settings={settings} setSettings={setSettings} />}
       </main>
     </div>
   );
-}
+});
 
 export default function App() {
   const [settings, setSettings] = useState({ language: 'system' });
@@ -89,11 +62,10 @@ export default function App() {
   // Files are kept PER SECTION so switching pages never loses them.
   const [filesBySection, setFilesBySection] = useState({ video: [], audio: [], subtitle: [] });
 
-  // Browser-like navigation history driven by sidebar clicks and the mouse
-  // back/forward side buttons.
+  // Keep browser-like navigation for the top bar and mouse side buttons.
   const [nav, setNav] = useState(() => createHistory('video'));
   const page = current(nav);
-  const setPage = (next) => setNav((prev) => push(prev, next));
+  const setPage = useCallback((next) => setNav((prev) => push(prev, next)), []);
   const goBack = () => setNav((prev) => back(prev));
   const goForward = () => setNav((prev) => forward(prev));
 
@@ -104,18 +76,20 @@ export default function App() {
       if (info?.gpuEncoders) setGpuEncoders(info.gpuEncoders);
       if (info?.platform) setPlatform(info.platform);
     });
-    bridge.listJobs().then(setJobs);
+    bridge.listJobs().then((snapshot) => setJobs(snapshot.map((job) => ({ ...job }))));
     const off = bridge.onJobsUpdated((job) => {
+      const snapshot = { ...job };
       setJobs((prev) => {
         const index = prev.findIndex((item) => item.id === job.id);
-        if (index < 0) return [...prev, job];
+        if (index < 0) return [...prev, snapshot];
         const next = [...prev];
-        next[index] = job;
+        next[index] = snapshot;
         return next;
       });
     });
     const offRemoved = bridge.onJobsRemoved((id) => setJobs((prev) => prev.filter((job) => job.id !== id)));
-    return () => { off(); offRemoved(); };
+    const offEngine = bridge.onEngineUpdated(({ gpuEncoders: encoders }) => setGpuEncoders(encoders));
+    return () => { off(); offRemoved(); offEngine(); };
   }, []);
 
   // Mouse side buttons: XButton1 (button 3) = back, XButton2 (button 4) = forward.
@@ -129,49 +103,45 @@ export default function App() {
     return () => window.removeEventListener('mouseup', onSideButton);
   }, []);
 
-  const setSectionFiles = (section, updater) => {
+  const setSectionFiles = useCallback((section, updater) => {
     setFilesBySection((prev) => ({
       ...prev,
       [section]: typeof updater === 'function' ? updater(prev[section]) : updater
     }));
-  };
+  }, []);
 
   // "Open in <section> tools": carry the current section's compatible files over.
   // Reset requestToken to trigger fresh probing in the target section.
-  const transfer = (target) => {
+  const transfer = useCallback((target) => {
     const current = filesBySection[page] || [];
     const { accepted } = filterForSection(current.map((f) => f.path), target);
     if (accepted.length) {
       setSectionFiles(target, (prev) => {
         const requestToken = Date.now() + Math.random();
         const known = new Set(prev.map((f) => f.path));
-        const fresh = accepted
-          .filter((p) => !known.has(p))
-          .map((p) => {
-            const existing = current.find((f) => f.path === p);
-            if (existing) {
-              return { ...existing, probing: false, requestToken };
-            }
-            return { path: p, name: p.split(/[/\\]/).pop(), kind: 'video', probing: false, probe: null, raw: null, requestToken };
-          });
+        const allowed = new Set(accepted);
+        const fresh = current
+          .filter((file) => allowed.has(file.path) && !known.has(file.path))
+          .map((file) => ({ ...file, probing: false, requestToken }));
         return [...prev, ...fresh];
       });
     }
     setPage(target);
-  };
+  }, [filesBySection, page, setPage, setSectionFiles]);
 
   return (
     <I18nProvider language={settings.language} systemLocale={systemLocale}>
-      <Shell
-        settings={settings} setSettings={setSettings}
-        jobs={jobs} setJobs={setJobs}
-        page={page} setPage={setPage}
-        filesBySection={filesBySection}
-        setSectionFiles={setSectionFiles}
-        transfer={transfer}
-        gpuEncoders={gpuEncoders}
-        platform={platform}
-      />
+      <JobQueue.Provider value={jobs}>
+        <Shell
+          settings={settings} setSettings={setSettings}
+          page={page} setPage={setPage}
+          filesBySection={filesBySection}
+          setSectionFiles={setSectionFiles}
+          transfer={transfer}
+          gpuEncoders={gpuEncoders}
+          platform={platform}
+        />
+      </JobQueue.Provider>
     </I18nProvider>
   );
 }

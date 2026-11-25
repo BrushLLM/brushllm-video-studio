@@ -7,7 +7,7 @@
 //   null    -> cannot be reliably estimated (CRF mode)
 
 import { resolveEncoding } from './resolve.mjs';
-import { containerOfSource, containerOfPath, editContainer, mergeCopyCompatibility, audioOutputExtension, audioProcessingFormat } from './media.mjs';
+import { containerOfSource, containerOfPath, editContainer, resolveMergeMode, audioOutputExtension, audioProcessingFormat } from './media.mjs';
 import contract from './media-contract.json' with { type: 'json' };
 
 const VIDEO_CODEC_LABELS = {
@@ -97,7 +97,7 @@ function buildPlan(op, params, source, opts = {}) {
     case 'video.compress': {
       // The SAME resolver that main.js applies before the job runs, so the
       // plan can never disagree with the actual ffmpeg command.
-      const r = resolveEncoding(op, p, src, { gpuEncoders: opts.gpuEncoders || [] });
+      const r = opts.encoding ?? resolveEncoding(op, p, src, opts);
       if (r.error) return { ...plan, error: r.error };
       plan.hw = r.hw;
       plan.cpuNote = r.cpuNote;
@@ -128,15 +128,13 @@ function buildPlan(op, params, source, opts = {}) {
     case 'video.merge': {
       const container = p.container === 'source' ? containerOfSource(src) : p.container || 'mp4';
       plan.containerLabel = CONTAINER_LABELS[container] || 'MP4';
-      let mode = p.mode || 'auto';
-      if (mode === 'auto') {
-        mode = mergeCopyCompatibility(opts.allProbes || []).compatible ? 'copy' : 'reencode';
-      }
+      const merge = opts.merge ?? resolveMergeMode(p, opts.allProbes);
+      if (merge.error) return { ...plan, error: merge.error };
       const totalDur = (opts.allProbes || []).length
         ? opts.allProbes.reduce((acc, x) => acc + ((x && x.durationSec) || 0), 0)
         : dur;
       plan.durationSec = totalDur || null;
-      if (mode === 'copy') {
+      if (merge.mode === 'copy') {
         plan.videoEncoderLabel = videoLabel(v && v.codec);
         plan.audioEncoderLabel = audioLabel(a && a.codec);
         plan.qualityLabel = 'stream copy';
@@ -261,7 +259,7 @@ function buildPlan(op, params, source, opts = {}) {
     case 'video.extractAudio': {
       const format = p.format || 'copy';
       if (format === 'copy') {
-        const ext = { aac: 'm4a', mp3: 'mp3', flac: 'flac', opus: 'opus', vorbis: 'ogg' }[a?.codec] || 'mka';
+        const ext = audioOutputExtension(a?.codec).slice(1);
         plan.containerLabel = containerLabel(ext);
         plan.audioEncoderLabel = audioLabel(a && a.codec);
         plan.qualityLabel = 'stream copy';

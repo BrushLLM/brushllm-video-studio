@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+const focusPrevious = (previous) => previous;
 
 // Modal focus management: Escape closes, Tab cycles inside the dialog,
 // focus lands inside on open and returns to the trigger on close.
-export function useModalFocus(onClose) {
+export function useModalFocus(onClose, restoreTarget = focusPrevious) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -40,9 +41,10 @@ export function useModalFocus(onClose) {
     node.addEventListener('keydown', onKey);
     return () => {
       node.removeEventListener('keydown', onKey);
-      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+      const target = restoreTarget(previouslyFocused);
+      if (target?.isConnected) target.focus({ preventScroll: true });
     };
-  }, [onClose]);
+  }, [onClose, restoreTarget]);
 
   return ref;
 }

@@ -179,6 +179,13 @@ test('video.metadata returns null (no ffmpeg run)', () => {
   assert.equal(buildJobCommands('video.metadata', {}, [IN], OUT, baseCtx), null);
 });
 
+test('audio.convert only forwards supported sample and channel options', () => {
+  const args = argsOf('audio.convert', { format: 'flac', sampleRate: 48000, channels: 1, filter: 'anull' });
+  assert.equal(args[args.indexOf('-ar') + 1], '48000');
+  assert.equal(args[args.indexOf('-ac') + 1], '1');
+  assert.ok(!args.includes('-af'));
+});
+
 test('audio.loudnorm uses EBU R128 params', () => {
   const args = argsOf('audio.loudnorm', { target: -16, tp: -1.5, lra: 11 });
   assert.match(args.join(' '), /loudnorm=I=-16:TP=-1\.5:LRA=11/);

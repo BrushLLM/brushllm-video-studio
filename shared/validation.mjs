@@ -1,5 +1,21 @@
 // Pure parameter validation shared by renderer and the trusted IPC boundary.
 // Missing source duration is unknown, not zero. This module never coerces or mutates params.
+import { resolveMergeMode } from './media.mjs';
+
+export const VIDEO_BITRATE_RANGE = Object.freeze({ min: 100, max: 100000 });
+
+const present = (value) => value != null && value !== '';
+const finite = (value) => (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) && Number.isFinite(Number(value));
+
+export function videoBitrateIssue(value) {
+  const { min, max } = VIDEO_BITRATE_RANGE;
+  if (finite(value) && Number(value) >= min && Number(value) <= max) return null;
+  return {
+    field: 'videoBitrate', code: 'bitrate-range', params: VIDEO_BITRATE_RANGE,
+    message: `Video bitrate must be between ${min} and ${max} kbps`
+  };
+}
+
 export function validateOperation(op, params = {}, source = null, opts = {}) {
   const p = params || {};
   const issues = [];
@@ -7,13 +23,14 @@ export function validateOperation(op, params = {}, source = null, opts = {}) {
   // (renderer shows t(`validation.${code}`, params); the English `message`
   // stays the engine-side fallback for the IPC boundary).
   const add = (field, code, message, vars) => issues.push(vars ? { field, code, message, params: vars } : { field, code, message });
-  const present = value => value != null && value !== '';
-  const finite = value => present(value) && typeof value !== 'boolean' && Number.isFinite(Number(value));
   const positive = (field, value, required = false) => {
     if ((required || present(value)) && (!finite(value) || Number(value) <= 0)) add(field, 'positive-number', `${field} must be a positive number`);
   };
   const knownDuration = finite(source?.durationSec) && Number(source.durationSec) > 0 ? Number(source.durationSec) : null;
-  if (['video.convert', 'video.compress', 'video.merge'].includes(op) && (p.rateControl || p.mode) === 'bitrate') positive('videoBitrate', p.videoBitrate, true);
+  if (['video.convert', 'video.compress', 'video.merge'].includes(op) && (p.rateControl || p.mode) === 'bitrate') {
+    const issue = videoBitrateIssue(p.videoBitrate);
+    if (issue) issues.push(issue);
+  }
   for (const field of ['bitrate', 'audioBitrate']) {
     if (Object.hasOwn(p, field)) positive(field, p[field], true);
   }
@@ -55,9 +72,12 @@ export function validateOperation(op, params = {}, source = null, opts = {}) {
     if (present(p.sampleRate) && ![8000, 12000, 16000, 24000, 48000].includes(Number(p.sampleRate))) add('sampleRate', 'opus-sample-rate', 'Opus supports 8000, 12000, 16000, 24000 or 48000 Hz (not 44100 Hz)');
     const channels = Number(p.channels || source?.audio?.channels || 2);
     const bitrate = Number(p.bitrate ?? p.audioBitrate ?? 160);
-      if (Number.isFinite(bitrate) && (bitrate < 6 || bitrate > 256 * channels)) add(p.bitrate !== undefined ? 'bitrate' : 'audioBitrate', 'opus-bitrate', `Opus bitrate must be between 6 and ${256 * channels} kbps for ${channels} channel(s)`, { max: 256 * channels, channels });
+    if (Number.isFinite(bitrate) && (bitrate < 6 || bitrate > 256 * channels)) add(p.bitrate !== undefined ? 'bitrate' : 'audioBitrate', 'opus-bitrate', `Opus bitrate must be between 6 and ${256 * channels} kbps for ${channels} channel(s)`, { max: 256 * channels, channels });
   }
-  if (op === 'video.merge' && (opts.allProbes || []).some(s => (s?.audioStreams?.length || 0) > 1 || (s?.videoStreams?.filter(v => !v.attachedPic).length || 0) > 1) && (p.mergeMode || p.mode) === 'reencode') add('mode', 'ambiguous-streams', 'Re-encode merge requires one main video and at most one audio stream per input; multi-track correspondence is ambiguous');
+  if (op === 'video.merge' && opts.allProbes) {
+    const merge = opts.merge ?? resolveMergeMode(p, opts.allProbes);
+    if (merge.error) add('mode', merge.code, merge.error);
+  }
   return issues;
 }
 

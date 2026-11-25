@@ -125,7 +125,8 @@ const CHARSET_LABELS = {
   big5: 'Big5',
   shift_jis: 'Shift-JIS',
   'euc-kr': 'EUC-KR',
-  'iso-8859-1': 'Latin-1'
+  'iso-8859-1': 'Latin-1',
+  'windows-1252': 'Windows-1252'
 };
 
 function normalizeCharset(charset) {
@@ -142,6 +143,7 @@ function normalizeCharset(charset) {
     'utf-16-le': 'utf-16le',
     utf16be: 'utf-16be',
     'utf-16-be': 'utf-16be',
+    gb2312: 'gbk',
     'shift-jis': 'shift_jis',
     sjis: 'shift_jis',
     latin1: 'iso-8859-1',

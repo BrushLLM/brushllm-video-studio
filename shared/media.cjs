@@ -24,10 +24,20 @@ function editContainer(source = {}) {
   return ['mp4', 'mkv', 'mov'].includes(c) ? c : 'mp4';
 }
 
+function compressionContainer(source) {
+  const container = containerOfSource(source);
+  return Object.hasOwn(contract.containers, container) ? container : 'mp4';
+}
+
 function videoCodecForContainer(container, codec) {
   if (container === 'webm' && !['vp8', 'vp9', 'av1', 'copy'].includes(codec)) return 'vp9';
   if (container === 'avi' && !['mpeg4', 'copy'].includes(codec)) return 'mpeg4';
   return codec;
+}
+
+function mpeg4Quality(crf) {
+  const quality = crf != null && crf !== '' && Number.isFinite(Number(crf)) ? Number(crf) : 20;
+  return Math.max(2, Math.min(31, Math.round(quality * 29 / 51 + 2)));
 }
 
 function audioOutputExtension(codec) {
@@ -65,6 +75,28 @@ function mergeCopyCompatibility(probes = []) {
     first = signature;
   }
   return { compatible: true, reason: null };
+}
+
+function resolveMergeMode(params, probes = []) {
+  const requested = params.mergeMode || params.mode || 'auto';
+  if (requested === 'auto' || requested === 'copy') {
+    const compatibility = mergeCopyCompatibility(probes);
+    if (compatibility.compatible) return { mode: 'copy' };
+    if (requested === 'copy') return { mode: 'copy', code: 'merge-copy-incompatible', error: compatibility.reason };
+  }
+  const hasMultipleTracks = probes.some((probe) => {
+    const audio = probe?.audioStreams ?? probe?.streams?.filter((stream) => stream.type === 'audio') ?? [];
+    const video = probe?.videoStreams ?? probe?.streams?.filter((stream) => stream.type === 'video') ?? [];
+    return audio.length > 1 || video.filter((stream) => !stream.attachedPic).length > 1;
+  });
+  if (hasMultipleTracks) {
+    return {
+      mode: 'reencode',
+      code: 'ambiguous-streams',
+      error: 'Re-encode merge requires one main video and at most one audio stream per input; multi-track correspondence is ambiguous'
+    };
+  }
+  return { mode: 'reencode' };
 }
 
 const VIDEO_EXTS = ['mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', 'mpg', 'mpeg', 'ts', 'flv', 'wmv', 'vob', 'ogv', '3gp'];
@@ -108,6 +140,9 @@ function inputFilesForOp(files, inputKind) {
   return files.filter((f) => f.kind === inputKind);
 }
 
-
-
-module.exports = { containerOfPath, containerOfSource, editContainer, videoCodecForContainer, audioOutputExtension, audioProcessingFormat, displaySize, mergeCopyCompatibility, AUDIO_FORMATS, AUDIO_CODEC_EXTENSIONS, fileKindOf, filterForSection, inputFilesForOp, acceptsFor, VIDEO_EXTS, AUDIO_EXTS, SUBTITLE_EXTS };
+module.exports = {
+  containerOfPath, containerOfSource, editContainer, compressionContainer, videoCodecForContainer, mpeg4Quality,
+  audioOutputExtension, audioProcessingFormat, displaySize, mergeCopyCompatibility, resolveMergeMode,
+  AUDIO_FORMATS, AUDIO_CODEC_EXTENSIONS, fileKindOf, filterForSection, inputFilesForOp, acceptsFor,
+  VIDEO_EXTS, AUDIO_EXTS, SUBTITLE_EXTS
+};

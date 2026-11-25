@@ -57,8 +57,11 @@ test('speed divides the output duration', () => {
 });
 
 test('merge sums durations and sizes in copy mode', () => {
-  const other = { ...SOURCE, durationSec: 50, size: 25 * 1024 * 1024 };
-  const p = plan.buildPlan('video.merge', { mode: 'copy', container: 'mp4' }, SOURCE, { allProbes: [SOURCE, other] });
+  const streams = [{ type: 'video', codec: 'h264', timeBase: '1/12288', width: 1920, height: 1080,
+    pixFmt: 'yuv420p', sampleAspectRatio: '1:1', frameRate: '24/1', extradataSize: 0 }];
+  const first = { ...SOURCE, streams };
+  const other = { ...first, durationSec: 50, size: 25 * 1024 * 1024 };
+  const p = plan.buildPlan('video.merge', { mode: 'copy', container: 'mp4' }, first, { allProbes: [first, other] });
   assert.equal(p.durationSec, 150);
   assert.equal(p.sizeEstimate, 75 * 1024 * 1024);
 });
