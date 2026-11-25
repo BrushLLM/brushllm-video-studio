@@ -66,7 +66,7 @@ export default {
   'common.fps': 'FPS',
   'common.probing': 'Leyendo metadatos…',
   'common.noStreams': 'No se encontraron pistas de subtítulos en este archivo.',
-  'common.imageSubs': 'Los subtítulos de imagen (PGS/DVD) aún no se admiten — llegarán con la versión de IA.',
+  'common.imageSubs': 'La extracción de subtítulos admite pistas de texto.',
   'common.seconds': 's',
   'common.replace': 'Reemplazar',
   'common.audioFile': 'Archivo de audio',
@@ -232,8 +232,6 @@ export default {
   'settings.version': 'Versión',
   'settings.references': 'Inspirado en',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit — gracias por la inspiración.',
-  'settings.aiFuture': 'Funciones de IA (más adelante)',
-  'settings.aiFutureText': 'OCR de subtítulos de imagen, transcripción, escalado y más se conectarán aquí — todo lo que ves hoy funciona completamente sin conexión.',
   'settings.gplPre': "FFmpeg se distribuye bajo la GPL; su código fuente está en",
   'settings.gplPost': ".",
 

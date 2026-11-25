@@ -66,7 +66,7 @@ export default {
   'common.fps': '帧率',
   'common.probing': '正在读取元数据…',
   'common.noStreams': '该文件中没有字幕轨道。',
-  'common.imageSubs': '图形字幕(PGS/DVD)暂不支持 —— 将在 AI 版本中提供。',
+  'common.imageSubs': '字幕提取支持文本轨道。',
   'common.seconds': '秒',
   'common.replace': '更换',
   'common.audioFile': '个音频文件',
@@ -232,8 +232,6 @@ export default {
   'settings.version': '版本',
   'settings.references': '灵感来自',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit —— 感谢这些项目带来的启发。',
-  'settings.aiFuture': 'AI 功能（后期推出）',
-  'settings.aiFutureText': '图形字幕 OCR、语音转写、超分辨率等将在这里接入 —— 当前界面上的所有功能都已完全离线可用。',
   'settings.gplPre': "FFmpeg 采用 GPL 许可，源码可在",
   'settings.gplPost': "获取。",
 

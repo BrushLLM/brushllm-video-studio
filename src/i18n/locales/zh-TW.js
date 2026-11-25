@@ -66,7 +66,7 @@ export default {
   'common.fps': '幀率',
   'common.probing': '正在讀取詮釋資料…',
   'common.noStreams': '此檔案中沒有字幕軌。',
-  'common.imageSubs': '圖形字幕(PGS/DVD)暫不支援 —— 將於 AI 版本提供。',
+  'common.imageSubs': '字幕擷取支援文字軌道。',
   'common.seconds': '秒',
   'common.replace': '更換',
   'common.audioFile': '個音訊檔案',
@@ -232,8 +232,6 @@ export default {
   'settings.version': '版本',
   'settings.references': '靈感來自',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit —— 感謝這些專案帶來的啟發。',
-  'settings.aiFuture': 'AI 功能（後期推出）',
-  'settings.aiFutureText': '圖形字幕 OCR、語音轉寫、超解析度等將在這裡接入 —— 目前畫面上的所有功能都已完全離線可用。',
   'settings.gplPre': "FFmpeg 採用 GPL 授權，原始碼可於",
   'settings.gplPost': "取得。",
 

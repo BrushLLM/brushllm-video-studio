@@ -66,7 +66,7 @@ export default {
   'common.fps': 'FPS',
   'common.probing': 'Metadaten werden gelesen…',
   'common.noStreams': 'Keine Untertitelspuren in dieser Datei gefunden.',
-  'common.imageSubs': 'Bildbasierte Untertitel (PGS/DVD) werden noch nicht unterstützt — sie kommen mit der KI-Version.',
+  'common.imageSubs': 'Die Untertitelextraktion unterstützt Textspuren.',
   'common.seconds': 's',
   'common.replace': 'Ersetzen',
   'common.audioFile': 'Audiodatei',
@@ -232,8 +232,6 @@ export default {
   'settings.version': 'Version',
   'settings.references': 'Inspiration von',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit — danke für die Inspiration.',
-  'settings.aiFuture': 'KI-Funktionen (später)',
-  'settings.aiFutureText': 'OCR für Bilduntertititel, Transkription, Upscaling und mehr werden hier angedockt — alles auf diesem Bildschirm läuft heute vollständig offline.',
   'settings.gplPre': "FFmpeg steht unter der GPL; der Quellcode ist auf",
   'settings.gplPost': "verfügbar.",
 

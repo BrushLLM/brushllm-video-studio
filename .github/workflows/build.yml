@@ -23,6 +23,8 @@ jobs:
       - name: Unit + end-to-end tests (real FFmpeg)
         run: npm test
       - run: npm run dist:mac-arm64
+      - name: Smoke-test the packaged media engine
+        run: node scripts/smoke-packaged.mjs "release/mac-arm64-build/mac-arm64/BrushLLM Video Studio.app/Contents/MacOS/BrushLLM Video Studio"
       - uses: actions/upload-artifact@v4
         with:
           name: mac-arm64
@@ -45,9 +47,12 @@ jobs:
       - name: Unit + end-to-end tests (real FFmpeg, Windows paths)
         run: npm test
         shell: bash
-      - run: npm run dist:win-x64 -- --publish never
+      - run: npm run dist:win-x64
         shell: bash
-      - run: npm run dist:win-arm64 -- --publish never
+      - name: Smoke-test the packaged x64 media engine
+        run: node scripts/smoke-packaged.mjs "release/win-x64-build/win-unpacked/BrushLLM Video Studio.exe"
+        shell: bash
+      - run: npm run dist:win-arm64
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
@@ -68,17 +73,21 @@ jobs:
           path: artifacts
       - name: Flatten artifacts
         run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$GITHUB_REF_NAME" = "v$version"
+          test -s "docs/releases/$GITHUB_REF_NAME.md"
+          shopt -s globstar nullglob
+          installers=(artifacts/**/*.dmg artifacts/**/*.exe)
+          test "${#installers[@]}" -eq 3
           mkdir -p out
-          find artifacts -name "*.dmg" -o -name "*.exe" | xargs -r -I{} cp {} out/
-          test "$(find out -name '*.dmg' | wc -l)" -eq 1
-          test "$(find out -name '*.exe' | wc -l)" -eq 2
-          for installer in out/*.dmg out/*.exe; do
-            mv "$installer" "${installer// /.}"
+          for installer in "${installers[@]}"; do
+            name="${installer##*/}"
+            cp "$installer" "out/${name// /.}"
           done
           cd out
-          sha256sum *.dmg *.exe > SHA256SUMS
-          cd ..
-          ls -la out/
+          stem="BrushLLM.Video.Studio-$version"
+          sha256sum "$stem-arm64.dmg" "$stem-x64.exe" "$stem-arm64.exe" > SHA256SUMS
+          sha256sum -c SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*

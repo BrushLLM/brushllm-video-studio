@@ -66,7 +66,7 @@ export default {
   'common.fps': 'IPS',
   'common.probing': 'Lecture des métadonnées…',
   'common.noStreams': 'Aucune piste de sous-titres dans ce fichier.',
-  'common.imageSubs': 'Les sous-titres image (PGS/DVD) ne sont pas encore pris en charge — ils arriveront avec la version IA.',
+  'common.imageSubs': 'L’extraction de sous-titres prend en charge les pistes texte.',
   'common.seconds': 's',
   'common.replace': 'Remplacer',
   'common.audioFile': 'Fichier audio',
@@ -232,8 +232,6 @@ export default {
   'settings.version': 'Version',
   'settings.references': 'Inspiré de',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit — merci pour l’inspiration.',
-  'settings.aiFuture': 'Fonctions IA (plus tard)',
-  'settings.aiFutureText': 'L’OCR des sous-titres image, la transcription, l’upscaling et plus se brancheront ici — tout ce qui est à l’écran fonctionne aujourd’hui entièrement hors ligne.',
   'settings.gplPre': "FFmpeg est sous licence GPL ; ses sources sont disponibles sur",
   'settings.gplPost': ".",
 

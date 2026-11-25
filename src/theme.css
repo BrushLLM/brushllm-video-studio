@@ -467,19 +467,6 @@ input[type='range']::-webkit-slider-thumb {
 .setting-controls .btn { flex: 0 0 auto; }
 
 .settings-block { margin-top: var(--space-3); }
-.settings-block-title { display: flex; align-items: center; gap: var(--space-1); }
-
-.settings-warning {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--warning-tint);
-  color: var(--warning-text);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-}
 
 .path-value {
   font-family: var(--mono);

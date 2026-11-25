@@ -66,7 +66,7 @@ export default {
   'common.fps': 'QPS',
   'common.probing': 'Lendo metadados…',
   'common.noStreams': 'Nenhuma faixa de legendas encontrada neste arquivo.',
-  'common.imageSubs': 'Legendas de imagem (PGS/DVD) ainda não são suportadas — chegarão na versão com IA.',
+  'common.imageSubs': 'A extração de legendas aceita faixas de texto.',
   'common.seconds': 's',
   'common.replace': 'Substituir',
   'common.audioFile': 'Arquivo de áudio',
@@ -232,8 +232,6 @@ export default {
   'settings.version': 'Versão',
   'settings.references': 'Inspirado em',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit — obrigado pela inspiração.',
-  'settings.aiFuture': 'Recursos de IA (mais tarde)',
-  'settings.aiFutureText': 'OCR de legendas de imagem, transcrição, upscaling e mais serão conectados aqui — tudo nesta tela funciona hoje totalmente offline.',
   'settings.gplPre': "O FFmpeg é licenciado sob a GPL; o código-fonte está em",
   'settings.gplPost': ".",
 

@@ -66,7 +66,7 @@ export default {
   'common.fps': 'FPS',
   'common.probing': '메타데이터 읽는 중…',
   'common.noStreams': '이 파일에는 자막 트랙이 없습니다.',
-  'common.imageSubs': '이미지 자막(PGS/DVD)은 아직 지원되지 않습니다 — AI 버전에서 지원될 예정입니다.',
+  'common.imageSubs': '텍스트 자막 트랙을 추출할 수 있습니다.',
   'common.seconds': '초',
   'common.replace': '교체',
   'common.audioFile': '오디오 파일',
@@ -232,8 +232,6 @@ export default {
   'settings.version': '버전',
   'settings.references': '영감을 받은 프로젝트',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit — 영감에 감사드립니다.',
-  'settings.aiFuture': 'AI 기능(추후 제공)',
-  'settings.aiFutureText': '이미지 자막 OCR, 전사, 업스케일링 등이 여기에 연결됩니다 — 지금 화면의 모든 기능은 완전한 오프라인으로 동작합니다.',
   'settings.gplPre': "FFmpeg은 GPL 라이선스입니다. 소스 코드는",
   'settings.gplPost': "에서 구할 수 있습니다.",
 

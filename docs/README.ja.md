@@ -1,19 +1,52 @@
-[English](../README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (BR)](README.pt-BR.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [한국어](README.ko.md)
-
----
+<img src="../build/video-studio.svg" width="72" height="72" alt="">
 
 # BrushLLM Video Studio
 
-ローカルファーストのデスクトップ動画ツールボックスです。動画・音声・字幕の 26 操作がすべて端末上で 100% 動作します。無料、オフライン、プライベート。
+動画、音声、字幕を処理する無料のデスクトップツールです。ローカルのファイルに同じ設定を適用して一括処理できます。FFmpeg と FFprobe を同梱しています。
 
-**ツール**：フォーマット変換 · 圧縮 · 結合 · トリミング · クロップ · リサイズ · 回転 · 速度変更 · フレーム抽出 · GIF/WebP · メタデータ · コンテナ変更 · 音声変換 · 圧縮 · トリミング · 音量 · ラウドネス · 音声抽出/置換 · 字幕変換 · タイミングシフト · エンコード修正。
+[最新リリース](https://github.com/BrushLLM/brushllm-video-studio/releases/latest) · [製品ページ](https://brushllm.com/ja/video-studio/)
 
-**ハイライト**：9 言語 UI · ハードウェアアクセラレーション（誠実な GPU 検出）· 一括処理 · CPU 使用率のライブ表示 · 処理中のスリープ防止 · テレメトリなし。
+[English](../README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [한국어](README.ko.md)
 
-**📥 ダウンロード**：最新のインストーラーは [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) —— macOS `.dmg`（Apple Silicon）、Windows `.exe`（x64 / ARM64）。アプリは未署名です —— macOS は初回起動時に右クリックで「開く」を選択、Windows は SmartScreen の警告で「実行」を選んでください。
+![4 つの素材、元のフレーム、出力見積もりを表示する動画の作業画面](../.github/assets/workspace.svg)
 
-開発とアーキテクチャの詳細は[英語版 README](../README.md) を参照。
+[処理キューの画面を見る](../.github/assets/queue.svg) · プレビュー素材 [MDN CC0 flower sample](https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4).
 
-## 📄 ライセンス
+## 主な機能
 
-MIT ライセンス — [LICENSE](../LICENSE) を参照。
+- **動画** — MP4、MKV、WebM、MOV、AVI の変換と圧縮。切り出し、クロップ、拡大縮小、回転、互換クリップの無劣化結合、静止画・アニメーションの書き出し。
+- **音声** — 音声の変換と切り出し、音量とラウドネスの調整、動画の音声トラックの抽出と置き換え。
+- **字幕** — SRT、VTT、ASS、SSA、TTML の変換、タイミング調整、文字コード修正。テキストトラック抽出、字幕の埋め込みと焼き付け。
+- **処理キュー** — 複数ファイルを読み込み、出力設定と進捗を確認できます。キューで一時停止、取り消し、再試行を行い、結果やエラーを確認できます。
+
+## ダウンロード
+
+最新リリースからお使いの端末に合うインストーラーを選んでください。
+
+| 対応環境 | インストーラー |
+| --- | --- |
+| macOS 12+（Apple Silicon） | `BrushLLM.Video.Studio-<version>-arm64.dmg` |
+| Windows x64（Intel / AMD） | `BrushLLM.Video.Studio-<version>-x64.exe` |
+| Windows ARM64 | `BrushLLM.Video.Studio-<version>-arm64.exe` |
+
+`SHA256SUMS` に 3 つのインストーラーのチェックサムが記載されています。macOS 版は公証されておらず、Windows 版は署名されていません。
+
+## 対応言語
+
+English · Deutsch · Español · Français · Português (Brasil) · 日本語 · 简体中文 · 繁體中文 · 한국어
+
+## ローカル開発
+
+Node.js 22 を使います。開発コマンドは Vite と Electron をまとめて起動します。
+
+```bash
+npm ci
+npm run fetch-binaries
+npm run dev
+```
+
+`npm test` で単体テストと FFmpeg を使った結合テストが実行されます。`npm run build` の後に `npm start` で本番用の画面を確認できます。
+
+## ライセンス
+
+アプリのソースコードは MIT ライセンスです。同梱の FFmpeg と FFprobe はそれぞれのライセンスに従います。 [MIT](../LICENSE) · [FFmpeg](media-engine/NOTICE.md)

@@ -1,86 +1,52 @@
-<p align="center">
-  <img src=".github/assets/icon.png" width="128" alt="BrushLLM Video Studio">
-</p>
+<img src="build/video-studio.svg" width="72" height="72" alt="">
 
-<h1 align="center">BrushLLM Video Studio</h1>
+# BrushLLM Video Studio
 
-<p align="center">
-  <a href="https://github.com/BrushLLM/brushllm-video-studio/releases"><img src="https://img.shields.io/github/v/release/BrushLLM/brushllm-video-studio?style=flat-square&color=orange" alt="Release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey?style=flat-square" alt="Platforms">
-  <img src="https://img.shields.io/badge/UI-9%20languages-success?style=flat-square" alt="Languages">
-</p>
+Free desktop tools for video, audio and subtitles. Work on local files and apply the same settings to a batch. FFmpeg and FFprobe are included.
 
-<p align="center">
-  <strong><a href="https://www.brushllm.com">🌐 brushllm.com</a></strong> · <a href="https://github.com/BrushLLM/brushllm-video-studio/releases">Releases</a>
-</p>
+[Latest release](https://github.com/BrushLLM/brushllm-video-studio/releases/latest) · [Product page](https://brushllm.com/video-studio/)
 
-<p align="center">A local-first desktop video toolbox — 26 operations across video, audio and subtitles, all running 100% on your device. Free, offline, private.</p>
+[English](README.md) | [Deutsch](docs/README.de.md) | [Español](docs/README.es.md) | [Français](docs/README.fr.md) | [Português (Brasil)](docs/README.pt-BR.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [繁體中文](docs/README.zh-TW.md) | [한국어](docs/README.ko.md)
 
-<p align="center">
-  <img src=".github/assets/screenshot.png" width="800" alt="BrushLLM Video Studio">
-</p>
+![Video workspace with four source files, a source frame and output estimate](.github/assets/workspace.svg)
 
-[English](README.md) | [Deutsch](docs/README.de.md) | [Español](docs/README.es.md) | [Français](docs/README.fr.md) | [Português (BR)](docs/README.pt-BR.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [繁體中文](docs/README.zh-TW.md) | [한국어](docs/README.ko.md)
+[See the processing queue](.github/assets/queue.svg) · Preview footage from the [MDN CC0 flower sample](https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4).
 
----
+## What you can do
 
-## ✨ Features
+- **Video** — Convert and compress MP4, MKV, WebM, MOV and AVI. Trim, crop, resize, rotate, merge compatible clips without re-encoding, and export frames or animations.
+- **Audio** — Convert audio, trim it, adjust volume and loudness, or extract and replace an audio track in a video.
+- **Subtitles** — Convert SRT, VTT, ASS, SSA and TTML, shift timing and repair text encoding. Extract text tracks, embed subtitles, or burn them into the picture.
+- **Batch queue** — Import a list of files, review the output settings and monitor progress. Pause, cancel or retry jobs and inspect results and errors in the queue.
 
-- **Video** (12 tools) — Convert (MP4 / MKV / WebM / MOV / AVI × H.264 / H.265 / VP9 / AV1) · Compress (CRF or bitrate) · Merge (lossless when codecs match) · Trim · Crop · Scale · Rotate / Flip · Speed (0.25–4×) · Extract Frames · GIF / WebP · Metadata · Container swap
-- **Audio** (8 tools) — Convert (MP3, M4A, FLAC, WAV, OGG, Opus) · Compress · Trim · Volume · Loudness normalization (EBU R128) · Extract from video · Remove / Replace track
-- **Subtitles** (6 tools) — SRT / VTT / ASS / SSA / TTML conversion (instant) · Timing shift · Encoding fix (GBK / Big5 → UTF-8) · Extract from video · Embed · Burn
-- **All operations support batch processing** — apply the same settings to an entire file list
-- Hardware acceleration with honest GPU detection (VideoToolbox on macOS) · 9-language UI · live CPU utilization · prevent-sleep during processing · pause / resume · zero telemetry
+## Download
 
-## 📥 Download
+Choose the installer for your device from the latest release.
 
-Grab the latest installer from [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases):
-
-| Platform | File |
+| Platform | Installer |
 | --- | --- |
-| macOS — Apple Silicon (M-series) | `.dmg` (arm64) |
-| Windows 10/11 — x64 (Intel/AMD) | `.exe` (x64) |
-| Windows 10/11 — ARM64 (Snapdragon) | `.exe` (arm64) |
+| macOS 12+ (Apple Silicon) | `BrushLLM.Video.Studio-<version>-arm64.dmg` |
+| Windows x64 (Intel / AMD) | `BrushLLM.Video.Studio-<version>-x64.exe` |
+| Windows ARM64 | `BrushLLM.Video.Studio-<version>-arm64.exe` |
 
-> **Apps are unsigned.** macOS: right-click the app → **Open** on first launch (Gatekeeper). Windows: choose **Run anyway** when SmartScreen appears — the installer opens with a 9-language selector.
+The release includes `SHA256SUMS` for all three installers. The macOS build is distributed without notarization and the Windows builds are unsigned.
 
-## 🌐 UI Languages
+## Interface languages
 
-English · Deutsch · Español · Français · Português (BR) · 日本語 · 简体中文 · 繁體中文 · 한국어
+English · Deutsch · Español · Français · Português (Brasil) · 日本語 · 简体中文 · 繁體中文 · 한국어
 
-Switch instantly in Settings — no restart.
+## Develop locally
 
-<details>
-<summary><strong>🛠 Develop</strong></summary>
+Use Node.js 22. The desktop dev launcher starts Vite and Electron together.
 
 ```bash
-npm install
-npm run fetch-binaries   # download pinned FFmpeg/ffprobe (SHA-256 verified)
-npm start                # launch the app
+npm ci
+npm run fetch-binaries
+npm run dev
 ```
 
-Tests: `npm test` — unit + end-to-end with real FFmpeg.
+`npm test` runs unit tests and integration tests against FFmpeg. Use `npm run build` followed by `npm start` to run the production renderer locally.
 
-</details>
+## License
 
-<details>
-<summary><strong>🏗 Architecture</strong></summary>
-
-- **UI** — React 18 + Vite in Electron. `src/pages` (tool pages) → `src/components` → `src/lib/bridge.js` (typed IPC wrappers).
-- **Engine** (`electron/engine`) — pure Node.js: `commands.js` (pure function: op + params → FFmpeg args, unit-tested), `queue.js` (job lifecycle, progress, pause/resume, CPU sampling), `resolve.mjs` (central encoding resolver shared by UI plan and actual command).
-- **Subtitle engine** (`shared/subtitles.js`) — pure JS, no dependencies: parse/write SRT, VTT, ASS, SSA, TTML; charset detection (UTF-8/GBK/Big5/Shift-JIS).
-- **Media engine** — pinned FFmpeg/ffprobe binaries per platform (SHA-256 verified), fetched via `scripts/fetch-binaries.mjs`.
-- **CI** — GitHub Actions builds all three platform installers on tag push.
-
-</details>
-
-## ⚠️ Known limitations
-
-- Image-based subtitles (PGS/DVD) are not supported yet — planned for the AI version.
-- GPU acceleration uses VideoToolbox on macOS; NVENC/QSV/AMF code is ready but untested on Windows.
-- Apps are unsigned (code signing can be added to CI later).
-
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE).
+The application source is MIT-licensed. Bundled FFmpeg and FFprobe follow their upstream licenses. [MIT](LICENSE) · [Media engine sources and license](docs/media-engine/NOTICE.md)

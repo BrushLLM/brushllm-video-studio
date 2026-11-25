@@ -1,6 +1,5 @@
 node_modules/
 dist/
-dist-electron/
 release/
 staging/
 *.log
@@ -18,4 +17,3 @@ vendor/
 # Generated artifacts
 benchmark-report.json
 tests/media/
-palette.png

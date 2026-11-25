@@ -1,19 +1,52 @@
-[English](../README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (BR)](README.pt-BR.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [한국어](README.ko.md)
-
----
+<img src="../build/video-studio.svg" width="72" height="72" alt="">
 
 # BrushLLM Video Studio
 
-Uma caixa de ferramentas de vídeo local-first — 26 operações de vídeo, áudio e legendas, todas executadas 100% na sua máquina. Grátis, offline, privado.
+Ferramentas de desktop gratuitas para vídeo, áudio e legendas. Processe arquivos no dispositivo e aplique a mesma configuração a um lote. Inclui FFmpeg e FFprobe.
 
-**Ferramentas:** Converter formato · Comprimir · Unir · Recortar · Cortar quadro · Redimensionar · Girar · Velocidade · Quadros · GIF/WebP · Metadados · Trocar contêiner · Converter áudio · Comprimir · Recortar · Volume · Intensidade · Extrair/Substituir áudio · Converter legendas · Deslocar tempo · Corrigir codificação.
+[Versão mais recente](https://github.com/BrushLLM/brushllm-video-studio/releases/latest) · [Página do produto](https://brushllm.com/pt-BR/video-studio/)
 
-**Destaques:** interface em 9 idiomas · aceleração por hardware com detecção honesta de GPU · processamento em lote · uso de CPU ao vivo · evitar suspensão · zero telemetria.
+[English](../README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [한국어](README.ko.md)
 
-**📥 Download:** instaladores em [Releases](https://github.com/BrushLLM/brushllm-video-studio/releases) — macOS `.dmg` (Apple Silicon), Windows `.exe` (x64 / ARM64). Apps não assinados: no primeiro uso, macOS exige clique com o botão direito → *Abrir*; Windows mostra SmartScreen → *Executar assim mesmo*.
+![Área de vídeo com quatro arquivos de origem, um quadro e uma estimativa de saída](../.github/assets/workspace.svg)
 
-Desenvolvimento e arquitetura: veja a [README em inglês](../README.md).
+[Ver a fila de processamento](../.github/assets/queue.svg) · Material de prévia de [MDN CC0 flower sample](https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4).
 
-## 📄 Licença
+## Recursos
 
-Licença MIT — consulte [LICENSE](../LICENSE).
+- **Vídeo** — Converta e comprima MP4, MKV, WebM, MOV e AVI. Corte, recorte, redimensione, gire, una clipes compatíveis sem recodificar e exporte quadros ou animações.
+- **Áudio** — Converta e corte áudio, ajuste volume e loudness ou extraia e substitua a faixa de áudio do vídeo.
+- **Legendas** — Converta SRT, VTT, ASS, SSA e TTML, ajuste os tempos e corrija a codificação. Extraia faixas de texto, incorpore legendas ou grave-as no vídeo.
+- **Fila de lotes** — Importe vários arquivos, confira a saída e acompanhe o progresso. Pause, cancele ou tente novamente e confira resultados e erros na fila.
+
+## Download
+
+Escolha o instalador adequado ao seu dispositivo na versão mais recente.
+
+| Plataforma | Instalador |
+| --- | --- |
+| macOS 12+ (Apple Silicon) | `BrushLLM.Video.Studio-<version>-arm64.dmg` |
+| Windows x64 (Intel / AMD) | `BrushLLM.Video.Studio-<version>-x64.exe` |
+| Windows ARM64 | `BrushLLM.Video.Studio-<version>-arm64.exe` |
+
+O arquivo `SHA256SUMS` contém as somas de verificação dos três instaladores. A versão macOS não é notarizada e os instaladores Windows não são assinados.
+
+## Idiomas da interface
+
+English · Deutsch · Español · Français · Português (Brasil) · 日本語 · 简体中文 · 繁體中文 · 한국어
+
+## Desenvolvimento local
+
+Use Node.js 22. O comando de desenvolvimento abre Vite e Electron juntos.
+
+```bash
+npm ci
+npm run fetch-binaries
+npm run dev
+```
+
+`npm test` executa testes unitários e de integração com FFmpeg. Execute `npm run build` e depois `npm start` para testar a interface de produção.
+
+## Licença
+
+O código do aplicativo usa a licença MIT. FFmpeg e FFprobe seguem as respectivas licenças de origem. [MIT](../LICENSE) · [FFmpeg](media-engine/NOTICE.md)

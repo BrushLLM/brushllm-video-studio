@@ -21,37 +21,6 @@ function touch(filePath, content = 'data') {
 const mockFfmpeg = path.join(__dirname, '../helpers/mock-ffmpeg.js');
 const mockFfprobe = path.join(__dirname, '../helpers/mock-ffprobe.js');
 
-function setupMockBinaries() {
-  if (!fs.existsSync(mockFfmpeg)) {
-    fs.writeFileSync(mockFfmpeg, `#!/usr/bin/env node
-const fs = require('fs');
-const args = process.argv.slice(2);
-const outIdx = args.lastIndexOf('-y') !== -1 ? args.indexOf('-y') + 1 : args.length - 1;
-const out = args[outIdx];
-if (out && !out.startsWith('-')) {
-  if (out.includes('%05d')) {
-    const dir = require('path').dirname(out);
-    fs.writeFileSync(require('path').join(dir, 'frame00001.png'), 'f1');
-  } else {
-    fs.writeFileSync(out, 'mock output');
-  }
-}
-process.stdout.write('out_time_us=1000000\\nspeed=1.0x\\n');
-`, { mode: 0o755 });
-  }
-  if (!fs.existsSync(mockFfprobe)) {
-    fs.writeFileSync(mockFfprobe, `#!/usr/bin/env node
-console.log(JSON.stringify({
-  streams: [
-    { codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, duration: '10.0' },
-    { codec_type: 'audio', codec_name: 'aac', duration: '10.0' }
-  ],
-  format: { duration: '10.0', size: '1000000' }
-}));
-`, { mode: 0o755 });
-  }
-}
-
 // ── Concurrency clamping ──────────────────────────────────────────────────────
 
 test('JobManager clamps concurrency to [1, 4]', () => {
@@ -76,7 +45,6 @@ test('setConcurrency clamps to [1, 4]', () => {
 // ── Cancel and retry ──────────────────────────────────────────────────────────
 
 test('cancel marks job as canceled and attempt is eventually cleared', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input data');
@@ -100,7 +68,6 @@ test('cancel marks job as canceled and attempt is eventually cleared', async () 
 });
 
 test('retry queues a canceled job again', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');
@@ -126,7 +93,6 @@ test('retry queues a canceled job again', async () => {
 });
 
 test('retry does NOT work while job.attempt still exists (settling phase)', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');
@@ -170,7 +136,6 @@ test('retry refuses when job is paused (not terminal)', () => {
 });
 
 test('retry on error job preserves old artifact and does not delete it', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');
@@ -205,7 +170,6 @@ process.exit(1);
 // ── Shutdown waiting for all runs ─────────────────────────────────────────────
 
 test('shutdown waits for all running jobs to finish', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');
@@ -253,7 +217,6 @@ test('add rejects new jobs during shutdown', async () => {
 });
 
 test('retry refuses new work during shutdown', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');
@@ -278,7 +241,6 @@ test('retry refuses new work during shutdown', async () => {
 // ── Cancel does not affect new retry attempt ──────────────────────────────────
 
 test('cancel→retry: old attempt abort does not affect new attempt', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');
@@ -311,7 +273,6 @@ test('cancel→retry: old attempt abort does not affect new attempt', async () =
 // ── remove/deleteOutput guards ────────────────────────────────────────────────
 
 test('remove refuses to remove a job while attempt exists', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');
@@ -340,7 +301,6 @@ test('remove refuses to remove a job while attempt exists', async () => {
 });
 
 test('deleteOutput refuses to delete while attempt exists', async () => {
-  setupMockBinaries();
   const dir = makeTmp();
   const input = path.join(dir, 'in.mp4');
   touch(input, 'input');

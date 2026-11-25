@@ -66,7 +66,7 @@ export default {
   'common.fps': 'FPS',
   'common.probing': 'メタデータを読み込み中…',
   'common.noStreams': 'このファイルに字幕ストリームはありません。',
-  'common.imageSubs': '画像ベースの字幕(PGS/DVD)は未対応です — AI 版で対応予定です。',
+  'common.imageSubs': '抽出できるのはテキスト字幕トラックです。',
   'common.seconds': '秒',
   'common.replace': '置き換え',
   'common.audioFile': 'オーディオファイル',
@@ -232,8 +232,6 @@ export default {
   'settings.version': 'バージョン',
   'settings.references': 'インスピレーション',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit — インスピレーションに感謝します。',
-  'settings.aiFuture': 'AI 機能(今後)',
-  'settings.aiFutureText': '画像字幕の OCR、文字起こし、アップスケールなどはここに接続されます — この画面のすべての機能は今日の時点で完全オフラインで動作します。',
   'settings.gplPre': "FFmpeg は GPL ライセンスです。ソースは",
   'settings.gplPost': "で入手できます。",
 

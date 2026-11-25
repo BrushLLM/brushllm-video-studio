@@ -66,7 +66,7 @@ export default {
   'common.fps': 'FPS',
   'common.probing': 'Reading metadata…',
   'common.noStreams': 'No subtitle streams found in this file.',
-  'common.imageSubs': 'Image-based subtitles (PGS/DVD) are not supported yet — they will arrive with the AI version.',
+  'common.imageSubs': 'Subtitle extraction supports text tracks.',
   'common.seconds': 's',
   'common.replace': 'Replace',
   'common.audioFile': 'Audio file',
@@ -232,8 +232,6 @@ export default {
   'settings.version': 'Version',
   'settings.references': 'Inspired by',
   'settings.referencesText': 'LosslessCut · HandBrake · Shutter Encoder · Subtitle Edit — thank you for the inspiration.',
-  'settings.aiFuture': 'AI features (coming later)',
-  'settings.aiFutureText': 'Image-subtitle OCR, transcription, upscaling and more will plug in here — everything on this screen works fully offline today.',
   'settings.gplPre': "FFmpeg is licensed under the GPL; its source is available at",
   'settings.gplPost': ".",
 

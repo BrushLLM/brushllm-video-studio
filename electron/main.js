@@ -163,8 +163,6 @@ function createWindow() {
     show: false,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 22 },
-    // Window/taskbar icon for Windows & Linux dev runs (macOS uses the Dock).
-    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     // Follows the system appearance so a dark-mode launch never flashes white.
     backgroundColor: windowBackground(),
     title: 'BrushLLM Video Studio',
@@ -183,7 +181,7 @@ function createWindow() {
   };
   nativeTheme.on('updated', syncWindowBackground);
   mainWindow.on('closed', () => nativeTheme.off('updated', syncWindowBackground));
-  const startUrl = process.env.ELECTRON_START_URL;
+  const startUrl = !app.isPackaged && process.env.ELECTRON_START_URL;
   if (startUrl) {
     mainWindow.loadURL(startUrl);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -191,77 +189,8 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
 
-  // Headless smoke check: BRUSHVS_SMOKE=1 electron . → exercises the preload
-  // bridge end-to-end (incl. a REAL ffmpeg job) and exits with a summary.
   if (process.env.BRUSHVS_SMOKE) {
-    mainWindow.webContents.once('did-finish-load', async () => {
-      try {
-        const { spawnSync } = require('node:child_process');
-        const { ffmpeg } = applyBinaries();
-        const smokeDir = path.join(app.getPath('userData'), 'smoke');
-        fs.rmSync(smokeDir, { recursive: true, force: true });
-        fs.mkdirSync(smokeDir, { recursive: true });
-        const testVideo = path.join(smokeDir, 'input.mp4');
-        const gen = spawnSync(ffmpeg, ['-hide_banner', '-y',
-          '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10',
-          '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
-          '-t', '2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac',
-          '-shortest', testVideo]);
-        if (gen.status !== 0) throw new Error(`smoke media generation failed: ${String(gen.stderr || '').slice(-300)}`);
-
-        const r = await mainWindow.webContents.executeJavaScript(`(async () => {
-          const b = window.brushvs;
-          if (!b) return { ok: false, error: 'preload bridge missing' };
-          if (typeof b.pathForFile !== 'function') return { ok: false, error: 'pathForFile missing (drag&drop broken)' };
-          const settings = await b.getSettings();
-          const info = await b.appInfo();
-          const rendered = !!document.querySelector('.studio-nav') && !!document.querySelector('.workbench');
-          // Exercise both output policies through real IPC, queue and FFmpeg.
-          const defaultOutputDir = ${JSON.stringify(path.join(smokeDir, 'global-output'))};
-          await b.setSettings({ outputDir: defaultOutputDir });
-          const added = await b.addJobs([
-            { op: 'video.mute', params: {}, inputs: [${JSON.stringify(testVideo)}], outputDir: '' },
-            { op: 'video.mute', params: {}, inputs: [${JSON.stringify(testVideo)}], outputDir: null }
-          ]);
-          const id = added[0].id;
-          const deadline = Date.now() + 60000;
-          let job = null;
-          let inherited = null;
-          while (Date.now() < deadline) {
-            const jobs = await b.listJobs();
-            job = jobs.find((j) => j.id === id);
-            inherited = jobs.find((j) => j.id === added[1].id);
-            if ([job, inherited].every(j => j && ['done', 'error', 'canceled'].includes(j.status))) break;
-            await new Promise((res) => setTimeout(res, 250));
-          }
-          await b.setSettings({ outputDir: settings.outputDir || '' });
-          const outputPolicyOk = job?.outputPath === ${JSON.stringify(path.join(smokeDir, 'input-muted.mp4'))}
-            && inherited?.outputPath === ${JSON.stringify(path.join(smokeDir, 'global-output', 'input-muted.mp4'))};
-          return {
-            ok: rendered && job?.status === 'done' && inherited?.status === 'done' && outputPolicyOk,
-            outputPolicyOk,
-            inheritedOutputPath: inherited?.outputPath,
-            rendered,
-            language: settings.language,
-            locale: info.locale,
-            arch: info.arch,
-            gpuEncoders: info.gpuEncoders,
-            jobStatus: job ? job.status : 'missing',
-            jobError: job && job.error ? job.error : null,
-            outputPath: job ? job.outputPath : null,
-            actual: job && job.actual ? { size: job.actual.size, durationSec: job.actual.durationSec } : null
-          };
-        })()`);
-
-        const outputOk = r.outputPath && r.inheritedOutputPath ? fs.existsSync(r.outputPath) && fs.existsSync(r.inheritedOutputPath) : false;
-        const ok = Boolean(r.ok) && outputOk;
-        console.log('SMOKE', JSON.stringify({ ...r, outputExists: outputOk, ok }));
-        app.exit(ok ? 0 : 1);
-      } catch (e) {
-        console.error('SMOKE FAIL', e && e.message ? e.message : String(e));
-        app.exit(1);
-      }
-    });
+    mainWindow.webContents.once('did-finish-load', () => require('./smoke')(mainWindow, manager.ffmpeg));
   }
 }
 
@@ -333,12 +262,13 @@ function registerIpc() {
 
   ipcMain.handle('app:info', async () => {
     await engineReady;
-    const { ffmpeg } = applyBinaries();
+    const { ffmpeg, ffprobe } = applyBinaries();
     return {
       version: app.getVersion(),
       electron: process.versions.electron,
       node: process.versions.node,
       ffmpegPath: ffmpeg,
+      ffprobePath: ffprobe,
       locale: app.getLocale(),
       platform: process.platform,
       arch: process.arch,
@@ -531,14 +461,7 @@ function registerIpc() {
 // ------------------------------------------------------------------ boot
 
 app.whenReady().then(async () => {
-  app.setName('BrushLLM Video Studio');
-  // Dev-mode brand identity: packaged builds get their icon and name from
-  // electron-builder; running from node_modules would otherwise show the
-  // generic Electron icon in the Dock. (The Dock hover name still comes
-  // from the binary's Info.plist in dev — only packaging fixes that.)
-  if (process.platform === 'darwin' && app.dock) {
-    try { app.dock.setIcon(path.join(__dirname, '..', 'build', 'icon.png')); } catch { /* dev-only nicety */ }
-  }
+  app.setName(require('../package.json').productName);
   try {
     settings = loadSettings();
     const { ffmpeg, ffprobe } = resolveBinaries(settings.ffmpegPath, settings.ffprobePath);

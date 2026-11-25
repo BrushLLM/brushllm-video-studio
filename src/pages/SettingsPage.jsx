@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n, LANGUAGES } from '../i18n';
-import { bridge, isElectron } from '../lib/bridge';
+import { bridge } from '../lib/bridge';
 import { Icon } from '../components/icons';
 import { useModalFocus } from '../lib/useModalFocus';
 
@@ -152,9 +152,8 @@ export default function SettingsPage({ settings, setSettings }) {
         <div className="setting-row">
           <div>
             <dl className="about-grid">
-              <dt>{t('settings.version')}</dt><dd>v{info?.version || '0.0.1'}</dd>
+              <dt>{t('settings.version')}</dt><dd>{info ? `v${info.version}` : '—'}</dd>
               <dt>Electron</dt><dd>{info?.electron || '—'}</dd>
-              <dt>FFmpeg</dt><dd>{info ? '6.0' : '—'}</dd>
             </dl>
           </div>
           <button className="btn btn-secondary btn-sm" disabled={checking} onClick={checkForUpdate}>
@@ -182,21 +181,9 @@ export default function SettingsPage({ settings, setSettings }) {
             ))}
           </div>
         </div>
-        <div className="settings-block">
-          <div className="setting-label settings-block-title">
-            <Icon name="bolt" size={13} /> {t('settings.aiFuture')}
-          </div>
-          <div className="setting-hint">{t('settings.aiFutureText')}</div>
-        </div>
         <div className="setting-hint settings-block">
           {t('settings.gplPre')} <button type="button" className="text-link" onClick={() => bridge.openExternal('https://ffmpeg.org')}>ffmpeg.org</button>{t('settings.gplPost')}
         </div>
-        {!isElectron && (
-          <div className="settings-warning">
-            <Icon name="warning" size={13} />
-            Browser preview mode — start the Electron app for real processing.
-          </div>
-        )}
       </div>
 
       {updateInfo && (

@@ -9,42 +9,27 @@
 const path = require('node:path');
 const fs = require('node:fs');
 
-const SUPPORTED = new Set(['darwin-arm64', 'win32-x64', 'win32-arm64']);
 const TARGET = `${process.platform}-${process.arch}`;
-const IS_WINDOWS = process.platform === 'win32';
-const EXE = (name) => (IS_WINDOWS ? `${name}.exe` : name);
-
-function unpacked(p) {
-  // In packaged builds the binaries live in app.asar.unpacked (see electron-builder.yml).
-  if (p && p.includes('app.asar')) {
-    return p.replace(/app\.asar/g, 'app.asar.unpacked');
-  }
-  return p;
-}
+const EXE = (name) => process.platform === 'win32' ? `${name}.exe` : name;
 
 function isPackagedElectron() {
-  return Boolean(process.versions.electron) && !process.defaultApp && !process.env.ELECTRON_START_URL;
+  return Boolean(process.versions.electron) && !process.defaultApp;
 }
 
-function vendorPath(name) {
-  // Dev: vendor/<platform>-<arch>/<name>. Packaged: staged vendor/<name>.
-  const candidates = [
-    path.join(__dirname, '..', '..', 'vendor', TARGET, EXE(name)),
-    unpacked(path.join(__dirname, '..', '..', 'staging', 'vendor', EXE(name)))
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
+function installedEnginePath(name) {
+  const candidate = isPackagedElectron()
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'staging', 'vendor', EXE(name))
+    : path.join(__dirname, '..', '..', 'vendor', TARGET, EXE(name));
+  return fs.existsSync(candidate) ? candidate : null;
 }
 
 function resolveBinaries(userFfmpegPath, userFfprobePath) {
-  let ffmpeg = userFfmpegPath || vendorPath('ffmpeg') || null;
-  let ffprobe = userFfprobePath || vendorPath('ffprobe') || null;
+  let ffmpeg = userFfmpegPath || installedEnginePath('ffmpeg');
+  let ffprobe = userFfprobePath || installedEnginePath('ffprobe');
 
   if (!ffmpeg || !ffprobe) {
     if (isPackagedElectron()) {
-      const missing = [!ffmpeg && `vendor/${TARGET}/ffmpeg`, !ffprobe && `vendor/${TARGET}/ffprobe`].filter(Boolean);
+      const missing = [!ffmpeg && EXE('ffmpeg'), !ffprobe && EXE('ffprobe')].filter(Boolean);
       throw new Error(
         `This package is missing its media engine (${missing.join(', ')}). ` +
         'The package is broken — please re-download or rebuild it.'
@@ -58,8 +43,4 @@ function resolveBinaries(userFfmpegPath, userFfprobePath) {
   return { ffmpeg, ffprobe };
 }
 
-function supportedTarget() {
-  return SUPPORTED.has(TARGET);
-}
-
-module.exports = { resolveBinaries, unpacked, supportedTarget, TARGET };
+module.exports = { resolveBinaries };
