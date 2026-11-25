@@ -37,7 +37,7 @@ English · Deutsch · Español · Français · Português (Brasil) · 日本語 
 
 ## 本機開發
 
-使用 Node.js 22。桌面開發指令會同時啟動 Vite 和 Electron。
+使用 Node.js 24 LTS。桌面開發指令會同時啟動 Vite 和 Electron。
 
 ```bash
 npm ci

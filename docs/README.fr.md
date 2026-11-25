@@ -37,7 +37,7 @@ English · Deutsch · Español · Français · Português (Brasil) · 日本語 
 
 ## Développement local
 
-Utilisez Node.js 22. La commande de développement lance Vite et Electron ensemble.
+Utilisez Node.js 24 LTS. La commande de développement lance Vite et Electron ensemble.
 
 ```bash
 npm ci

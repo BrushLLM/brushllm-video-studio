@@ -37,7 +37,7 @@ English · Deutsch · Español · Français · Português (Brasil) · 日本語 
 
 ## ローカル開発
 
-Node.js 22 を使います。開発コマンドは Vite と Electron をまとめて起動します。
+Node.js 24 LTS を使います。開発コマンドは Vite と Electron をまとめて起動します。
 
 ```bash
 npm ci

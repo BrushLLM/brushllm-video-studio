@@ -24,7 +24,7 @@ jobs:
     outputs:
       tag: ${{ steps.target.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify the release target
         id: target
         env:
@@ -32,7 +32,8 @@ jobs:
           BUILD_RUN_ID: ${{ inputs.reuse_build_run }}
         shell: bash
         run: |
-          tag="v$(node -p "require('./package.json').version")"
+          version="$(jq -er '.version' package.json)"
+          tag="v$version"
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
             if [[ -z "$REQUESTED_TAG" ]]; then
               if [[ -n "$BUILD_RUN_ID" ]]; then
@@ -91,10 +92,10 @@ jobs:
     if: inputs.reuse_build_run == ''
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: Fetch pinned media engine (SHA-256 verified)
@@ -104,7 +105,7 @@ jobs:
       - run: npm run dist:mac-arm64
       - name: Smoke-test the packaged media engine
         run: node scripts/smoke-packaged.mjs "release/mac-arm64-build/mac-arm64/BrushLLM Video Studio.app/Contents/MacOS/BrushLLM Video Studio"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: mac-arm64
           path: |
@@ -116,10 +117,10 @@ jobs:
     if: inputs.reuse_build_run == ''
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: Fetch pinned media engine (SHA-256 verified)
@@ -135,7 +136,7 @@ jobs:
         shell: bash
       - run: npm run dist:win-arm64
         shell: bash
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: windows
           path: |
@@ -155,8 +156,8 @@ jobs:
     concurrency:
       group: video-studio-release-${{ needs.prepare.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
           github-token: ${{ github.token }}
@@ -193,7 +194,7 @@ jobs:
           fi
           git fetch --no-tags origin "refs/tags/$TAG"
           test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$GITHUB_SHA"
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           files: out/*

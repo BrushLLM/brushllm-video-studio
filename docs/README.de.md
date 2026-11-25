@@ -37,7 +37,7 @@ English · Deutsch · Español · Français · Português (Brasil) · 日本語 
 
 ## Lokal entwickeln
 
-Node.js 22 verwenden. Der Entwicklungsbefehl startet Vite und Electron zusammen.
+Node.js 24 LTS verwenden. Der Entwicklungsbefehl startet Vite und Electron zusammen.
 
 ```bash
 npm ci

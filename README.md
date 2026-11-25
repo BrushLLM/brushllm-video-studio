@@ -37,7 +37,7 @@ English · Deutsch · Español · Français · Português (Brasil) · 日本語 
 
 ## Develop locally
 
-Use Node.js 22. The desktop dev launcher starts Vite and Electron together.
+Use Node.js 24 LTS. The desktop dev launcher starts Vite and Electron together.
 
 ```bash
 npm ci

@@ -37,7 +37,7 @@ English · Deutsch · Español · Français · Português (Brasil) · 日本語 
 
 ## Desenvolvimento local
 
-Use Node.js 22. O comando de desenvolvimento abre Vite e Electron juntos.
+Use Node.js 24 LTS. O comando de desenvolvimento abre Vite e Electron juntos.
 
 ```bash
 npm ci
