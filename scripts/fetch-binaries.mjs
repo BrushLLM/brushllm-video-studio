@@ -66,6 +66,16 @@ function verifyRuns(file, target) {
   }
 }
 
+function removeWorkDirectory(directory) {
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch (error) {
+    // Windows can still hold a verified executable open after the process exits.
+    if (process.platform !== 'win32' || !['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY'].includes(error.code)) throw error;
+    console.warn(`Could not remove temporary media engine files in ${directory}: ${error.message}`);
+  }
+}
+
 async function fetchDarwinArm64(work, destDir, spec) {
   for (const tool of ['ffmpeg', 'ffprobe']) {
     const { url, sha256, archiveSha256 } = spec[tool];
@@ -107,7 +117,6 @@ async function fetchWindows(work, destDir, spec, arch) {
     verifyRuns(src, `win32-${arch}`);
     rmSync(join(destDir, `${tool}.exe`), { force: true });
     copyFileSync(src, join(destDir, `${tool}.exe`));
-    rmSync(src, { force: true });
     console.log(`vendor/win32-${arch}/${tool}.exe: ${(statSync(join(destDir, `${tool}.exe`)).size / 1048576).toFixed(1)} MB — sha256 + arch verified`);
   }
 }
@@ -144,15 +153,15 @@ async function main() {
       } else {
         await fetchWindows(targetWork, destDir, PINNED[target], target.slice('win32-'.length));
       }
-      rmSync(targetWork, { recursive: true, force: true });
+      removeWorkDirectory(targetWork);
     }
     console.log('done.');
   } finally {
-    rmSync(work, { recursive: true, force: true });
+    removeWorkDirectory(work);
   }
 }
 
 main().catch((e) => {
-  console.error(e.message);
+  console.error(e);
   process.exit(1);
 });
