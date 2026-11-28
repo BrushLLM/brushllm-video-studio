@@ -68,123 +68,128 @@ export default function SettingsPage({ settings, setSettings }) {
   const enginePath = ffmpegPath || info?.ffmpegPath || '';
 
   return (
-    <div className="page-inner settings-page">
-      <header className="page-header">
-        <h1 id="workspace-title">{t('settings.title')}</h1>
-      </header>
-
-      <div className="card settings-group">
-        <h2>{t('settings.general')}</h2>
-        <div className="setting-row">
-          <div>
-            <div className="setting-label">{t('settings.language')}</div>
-            <div className="setting-hint">{t('settings.languageHint')}</div>
+    <>
+      <section className="workspace-pane settings-page" aria-labelledby="workspace-title">
+        <header className="workspace-heading">
+          <h1 id="workspace-title">{t('settings.title')}</h1>
+        </header>
+        <div className="workspace-scroll">
+          <div className="settings-grid">
+            <section className="card settings-group" aria-labelledby="settings-general">
+              <h2 id="settings-general">{t('settings.general')}</h2>
+              <div className="setting-row">
+                <div>
+                  <div className="setting-label">{t('settings.language')}</div>
+                  <div className="setting-hint">{t('settings.languageHint')}</div>
+                </div>
+                <select className="field" aria-label={t('settings.language')} value={settings.language || 'system'} onChange={(e) => update({ language: e.target.value })}>
+                  {LANGUAGES.map((l) => (
+                    <option key={l.value} value={l.value}>
+                      {l.value === 'system' ? t('settings.systemLanguage') : l.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={settings.outputDir ? 'setting-row setting-row-path' : 'setting-row'}>
+                <div>
+                  <div className="setting-label">{t('settings.outputDir')}</div>
+                  <div className="setting-hint">{t('settings.outputDirHint')}</div>
+                </div>
+                <div className="setting-controls">
+                  {settings.outputDir && <span className="path-value" title={settings.outputDir}>{settings.outputDir}</span>}
+                  <button className="btn btn-secondary" onClick={pickOutputDir}>{t('common.choose')}</button>
+                </div>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <div className="setting-label">{t('settings.preventSleep')}</div>
+                  <div className="setting-hint">{t('settings.preventSleepHint')}</div>
+                </div>
+                <button
+                  type="button"
+                  className={`switch${settings.preventSleep ? ' on' : ''}`}
+                  role="switch"
+                  aria-checked={Boolean(settings.preventSleep)}
+                  aria-label={t('settings.preventSleep')}
+                  onClick={() => update({ preventSleep: !settings.preventSleep })}
+                />
+              </div>
+              <div className="setting-row">
+                <div>
+                  <div className="setting-label">{t('settings.concurrency')}</div>
+                  <div className="setting-hint">{t('settings.concurrencyHint')}</div>
+                </div>
+                <div className="segmented" role="group" aria-label={t('settings.concurrency')}>
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={(settings.concurrency || 1) === n ? 'active' : ''}
+                      aria-pressed={(settings.concurrency || 1) === n}
+                      onClick={() => update({ concurrency: n })}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+            <div className="settings-details">
+              <section className="card settings-group" aria-labelledby="settings-engine">
+                <h2 id="settings-engine">{t('settings.engine')}</h2>
+                <div className="setting-row setting-row-path">
+                  <div>
+                    <div className="setting-label">{t('settings.ffmpeg')}</div>
+                    <div className="setting-hint">{t('settings.bundledHint')}</div>
+                  </div>
+                  <div className="setting-controls">
+                    <span className="path-value" title={enginePath}>{enginePath || t('settings.bundled')}</span>
+                    <button className="btn btn-secondary" onClick={pickFfmpeg}>{t('common.choose')}</button>
+                  </div>
+                </div>
+              </section>
+              <section className="card settings-group" aria-labelledby="settings-about">
+                <h2 id="settings-about">{t('settings.about')}</h2>
+                <div className="setting-row about-version">
+                  <div>
+                    <dl className="about-grid">
+                      <dt>{t('settings.version')}</dt><dd>{info ? `v${info.version}` : '—'}</dd>
+                      <dt>Electron</dt><dd>{info?.electron || '—'}</dd>
+                    </dl>
+                  </div>
+                  <button className="btn btn-secondary btn-sm" disabled={checking} onClick={checkForUpdate}>
+                    {checking ? '…' : t('settings.checkUpdate')}
+                  </button>
+                </div>
+                {updateStatus && (
+                  <div className={`update-status ${updateStatus.kind}`} role="status">
+                    {updateStatus.msg}
+                    {updateStatus.kind === 'info' && updateInfo && (
+                      <button
+                        className="update-link"
+                        onClick={() => bridge.openExternal(updateInfo.releaseUrl)}
+                      >
+                        {t('settings.goToDownload')}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="settings-block">
+                  <div className="setting-label">{t('settings.references')}</div>
+                  <div className="ref-list">
+                    {['LosslessCut', 'HandBrake', 'Shutter Encoder', 'Subtitle Edit'].map((r) => (
+                      <span key={r} className="ref-pill">{r}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="setting-hint settings-block">
+                  {t('settings.gplPre')} <button type="button" className="text-link" onClick={() => bridge.openExternal('https://ffmpeg.org')}>ffmpeg.org</button>{t('settings.gplPost')}
+                </div>
+              </section>
+            </div>
           </div>
-          <select className="field" aria-label={t('settings.language')} value={settings.language || 'system'} onChange={(e) => update({ language: e.target.value })}>
-            {LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.value === 'system' ? t('settings.systemLanguage') : l.label}
-              </option>
-            ))}
-          </select>
         </div>
-        <div className="setting-row">
-          <div>
-            <div className="setting-label">{t('settings.outputDir')}</div>
-            <div className="setting-hint">{t('settings.outputDirHint')}</div>
-          </div>
-          <div className="setting-controls">
-            {settings.outputDir && <span className="path-value" title={settings.outputDir}>{settings.outputDir}</span>}
-            <button className="btn btn-secondary" onClick={pickOutputDir}>{t('common.choose')}</button>
-          </div>
-        </div>
-        <div className="setting-row">
-          <div>
-            <div className="setting-label">{t('settings.preventSleep')}</div>
-            <div className="setting-hint">{t('settings.preventSleepHint')}</div>
-          </div>
-          <button
-            type="button"
-            className={`switch${settings.preventSleep ? ' on' : ''}`}
-            role="switch"
-            aria-checked={Boolean(settings.preventSleep)}
-            aria-label={t('settings.preventSleep')}
-            onClick={() => update({ preventSleep: !settings.preventSleep })}
-          />
-        </div>
-        <div className="setting-row">
-          <div>
-            <div className="setting-label">{t('settings.concurrency')}</div>
-            <div className="setting-hint">{t('settings.concurrencyHint')}</div>
-          </div>
-          <div className="segmented" role="group" aria-label={t('settings.concurrency')}>
-            {[1, 2, 3].map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={(settings.concurrency || 1) === n ? 'active' : ''}
-                aria-pressed={(settings.concurrency || 1) === n}
-                onClick={() => update({ concurrency: n })}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="card settings-group">
-        <h2>{t('settings.engine')}</h2>
-        <div className="setting-row">
-          <div>
-            <div className="setting-label">{t('settings.ffmpeg')}</div>
-            <div className="setting-hint">{t('settings.bundledHint')}</div>
-          </div>
-          <div className="setting-controls">
-            <span className="path-value" title={enginePath}>{enginePath || t('settings.bundled')}</span>
-            <button className="btn btn-secondary" onClick={pickFfmpeg}>{t('common.choose')}</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="card settings-group">
-        <h2>{t('settings.about')}</h2>
-        <div className="setting-row">
-          <div>
-            <dl className="about-grid">
-              <dt>{t('settings.version')}</dt><dd>{info ? `v${info.version}` : '—'}</dd>
-              <dt>Electron</dt><dd>{info?.electron || '—'}</dd>
-            </dl>
-          </div>
-          <button className="btn btn-secondary btn-sm" disabled={checking} onClick={checkForUpdate}>
-            {checking ? '…' : t('settings.checkUpdate')}
-          </button>
-        </div>
-        {updateStatus && (
-          <div className={`update-status ${updateStatus.kind}`}>
-            {updateStatus.msg}
-            {updateStatus.kind === 'info' && updateInfo && (
-              <button
-                className="update-link"
-                onClick={() => bridge.openExternal(updateInfo.releaseUrl)}
-              >
-                {t('settings.goToDownload')}
-              </button>
-            )}
-          </div>
-        )}
-        <div className="settings-block">
-          <div className="setting-label">{t('settings.references')}</div>
-          <div className="ref-list">
-            {['LosslessCut', 'HandBrake', 'Shutter Encoder', 'Subtitle Edit'].map((r) => (
-              <span key={r} className="ref-pill">{r}</span>
-            ))}
-          </div>
-        </div>
-        <div className="setting-hint settings-block">
-          {t('settings.gplPre')} <button type="button" className="text-link" onClick={() => bridge.openExternal('https://ffmpeg.org')}>ffmpeg.org</button>{t('settings.gplPost')}
-        </div>
-      </div>
+      </section>
 
       {updateInfo && (
         <div className="modal-overlay" onClick={() => setUpdateInfo(null)}>
@@ -226,7 +231,6 @@ export default function SettingsPage({ settings, setSettings }) {
           </div>
         </div>
       )}
-
-    </div>
+    </>
   );
 }

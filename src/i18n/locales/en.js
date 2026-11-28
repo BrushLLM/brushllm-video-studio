@@ -1,5 +1,9 @@
 export default {
   'nav.workspace': "Workspace navigation",
+  'nav.collapse': "Collapse sidebar",
+  'nav.expand': "Expand sidebar",
+  'common.back': "Back",
+  'common.forward': "Forward",
   'workspace.preview': "Media & preview",
   'workspace.previewFrame': "Preview source frame",
   'workspace.previewFailed': "The source frame could not be shown. Check that the file plays.",

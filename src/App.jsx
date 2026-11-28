@@ -2,16 +2,33 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { I18nProvider } from './i18n';
 import { bridge } from './lib/bridge';
 import { filterForSection } from '../shared/media.mjs';
-import { createHistory, push, back, forward, current } from './lib/navhistory.js';
+import { createHistory, push, back, forward, current, canBack, canForward } from './lib/navhistory.js';
 import ToolPage from './components/ToolPage';
-import StudioHeader from './components/StudioHeader';
+import StudioSidebar from './components/StudioSidebar';
+import WindowToolbar from './components/WindowToolbar';
 import SettingsPage from './pages/SettingsPage';
 import { JobQueue } from './lib/jobQueue';
 
-const Shell = memo(function Shell({ settings, setSettings, page, setPage, filesBySection, setSectionFiles, transfer, gpuEncoders, platform }) {
+const compactWindow = '(max-width: 960px)';
+
+const Shell = memo(function Shell({ settings, setSettings, nav, setPage, goBack, goForward, filesBySection, setSectionFiles, transfer, gpuEncoders, platform }) {
+  const page = current(nav);
   const toolDrafts = useRef({});
   const workspace = useRef(null);
   const moveFocus = useRef(false);
+  const sidebarToggle = useRef(null);
+  const [expanded, setExpanded] = useState(() => !window.matchMedia(compactWindow).matches);
+  const [sidebarTools, setSidebarTools] = useState(null);
+
+  useEffect(() => {
+    const media = window.matchMedia(compactWindow);
+    const resize = ({ matches }) => {
+      if (matches && document.activeElement?.closest('.sidebar-tools')) sidebarToggle.current?.focus();
+      setExpanded(!matches);
+    };
+    media.addEventListener('change', resize);
+    return () => media.removeEventListener('change', resize);
+  }, []);
 
   useLayoutEffect(() => {
     if (moveFocus.current) {
@@ -28,8 +45,10 @@ const Shell = memo(function Shell({ settings, setSettings, page, setPage, filesB
   const transferFiles = useCallback((target) => navigateFromWorkspace(() => transfer(target)), [navigateFromWorkspace, transfer]);
 
   return (
-    <div className="app" data-platform={platform}>
-      <StudioHeader page={page} onNavigate={setPage} />
+    <div className="app" data-platform={platform} data-sidebar-expanded={expanded}>
+      <WindowToolbar ref={sidebarToggle} expanded={expanded} onToggle={() => setExpanded((value) => !value)}
+        canBack={canBack(nav)} canForward={canForward(nav)} onBack={goBack} onForward={goForward} />
+      <StudioSidebar page={page} onNavigate={setPage} expanded={expanded} toolsRef={setSidebarTools} />
       <main className="workspace" ref={workspace} tabIndex={-1} aria-labelledby="workspace-title">
         {['video', 'audio', 'subtitle'].includes(page) ? (
           <ToolPage
@@ -42,11 +61,10 @@ const Shell = memo(function Shell({ settings, setSettings, page, setPage, filesB
             gpuEncoders={gpuEncoders}
             defaultOutputDir={settings.outputDir || ''}
             drafts={toolDrafts.current}
+            sidebarTools={sidebarTools}
           />
         ) : (
-          <div className="content">
-            <SettingsPage settings={settings} setSettings={setSettings} />
-          </div>
+          <SettingsPage settings={settings} setSettings={setSettings} />
         )}
       </main>
     </div>
@@ -62,12 +80,12 @@ export default function App() {
   // Files are kept PER SECTION so switching pages never loses them.
   const [filesBySection, setFilesBySection] = useState({ video: [], audio: [], subtitle: [] });
 
-  // Keep browser-like navigation for the top bar and mouse side buttons.
+  // Keep navigation history for the sidebar and mouse side buttons.
   const [nav, setNav] = useState(() => createHistory('video'));
   const page = current(nav);
   const setPage = useCallback((next) => setNav((prev) => push(prev, next)), []);
-  const goBack = () => setNav((prev) => back(prev));
-  const goForward = () => setNav((prev) => forward(prev));
+  const goBack = useCallback(() => setNav(back), []);
+  const goForward = useCallback(() => setNav(forward), []);
 
   useEffect(() => {
     bridge.getSettings().then((s) => setSettings(s || { language: 'system' }));
@@ -101,7 +119,7 @@ export default function App() {
     };
     window.addEventListener('mouseup', onSideButton);
     return () => window.removeEventListener('mouseup', onSideButton);
-  }, []);
+  }, [goBack, goForward]);
 
   const setSectionFiles = useCallback((section, updater) => {
     setFilesBySection((prev) => ({
@@ -134,7 +152,7 @@ export default function App() {
       <JobQueue.Provider value={jobs}>
         <Shell
           settings={settings} setSettings={setSettings}
-          page={page} setPage={setPage}
+          nav={nav} setPage={setPage} goBack={goBack} goForward={goForward}
           filesBySection={filesBySection}
           setSectionFiles={setSectionFiles}
           transfer={transfer}

@@ -162,7 +162,7 @@ function createWindow() {
     minHeight: 540,
     show: false,
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 22 },
+    trafficLightPosition: { x: 16, y: 15 },
     // Follows the system appearance so a dark-mode launch never flashes white.
     backgroundColor: windowBackground(),
     title: 'BrushLLM Video Studio',
@@ -269,7 +269,7 @@ function registerIpc() {
       node: process.versions.node,
       ffmpegPath: ffmpeg,
       ffprobePath: ffprobe,
-      locale: app.getLocale(),
+      locale: app.getPreferredSystemLanguages()[0] || app.getLocale(),
       platform: process.platform,
       arch: process.arch,
       cpuCount: CPU_COUNT,

@@ -26,7 +26,7 @@ mac:
     NSMicrophoneUsageDescription: This app does not access the microphone.
     NSCameraUsageDescription: This app does not access the camera.
 dmg:
-  title: BrushLLM Video Studio ${version}
+  artifactName: BrushLLM Video Studio-${version}-${arch}.${ext}
 win:
   target:
     - nsis

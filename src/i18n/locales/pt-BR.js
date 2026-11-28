@@ -1,5 +1,9 @@
 export default {
   'nav.workspace': "Navegação da área de trabalho",
+  'nav.collapse': "Recolher barra lateral",
+  'nav.expand': "Expandir barra lateral",
+  'common.back': "Voltar",
+  'common.forward': "Avançar",
   'workspace.preview': "Mídia e prévia",
   'workspace.previewFrame': "Ver quadro de origem",
   'workspace.previewFailed': "Não foi possível mostrar o quadro de origem. Verifique se o arquivo é reproduzido.",

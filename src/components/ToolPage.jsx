@@ -17,7 +17,7 @@ import VideoPreview from './VideoPreview';
 import WorkspacePane from './WorkspacePane';
 import { Icon } from './icons';
 
-export default memo(function ToolPage({ section, files, setFiles, onTransfer, platform, gpuEncoders, defaultOutputDir = '', drafts }) {
+export default memo(function ToolPage({ section, files, setFiles, onTransfer, platform, gpuEncoders, defaultOutputDir = '', drafts, sidebarTools }) {
   const { t } = useI18n();
   const ops = useMemo(() => opsForSection(section), [section]);
   const [selectedOp, setSelectedOp] = useState(() => drafts[section]?.selectedOp || ops[0].id);
@@ -237,7 +237,7 @@ export default memo(function ToolPage({ section, files, setFiles, onTransfer, pl
     <div className="workbench">
       <div className="workbench-controls">
         <div className="controls-scroll">
-          <OperationGrid ops={ops} selected={selectedOp} onSelect={selectOp} />
+          <OperationGrid ops={ops} selected={selectedOp} onSelect={selectOp} sidebar={sidebarTools} />
           <section className="inspector" aria-labelledby="inspector-title">
             <header className="inspector-header">
               <span className="inspector-icon"><Icon name={op.icon} size={22} /></span>

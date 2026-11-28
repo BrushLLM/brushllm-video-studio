@@ -1,5 +1,9 @@
 export default {
   'nav.workspace': "工作區導覽",
+  'nav.collapse': "收合側欄",
+  'nav.expand': "展開側欄",
+  'common.back': "上一頁",
+  'common.forward': "下一頁",
   'workspace.preview': "素材與預覽",
   'workspace.previewFrame': "預覽來源畫面",
   'workspace.previewFailed': "無法預覽來源畫面。請檢查檔案能否正常播放。",

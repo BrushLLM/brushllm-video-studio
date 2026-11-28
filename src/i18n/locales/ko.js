@@ -1,5 +1,9 @@
 export default {
   'nav.workspace': "작업 공간 탐색",
+  'nav.collapse': "사이드바 접기",
+  'nav.expand': "사이드바 펼치기",
+  'common.back': "뒤로",
+  'common.forward': "앞으로",
   'workspace.preview': "파일 및 미리보기",
   'workspace.previewFrame': "원본 프레임 보기",
   'workspace.previewFailed': "원본 프레임을 표시할 수 없습니다. 파일이 재생되는지 확인하세요.",

@@ -138,7 +138,7 @@ export default function ParamPanel({ op, params, setParams, files, gpuEncoders =
         );
       case 'switch':
         return (
-          <div key={p.key} className="param-field">
+          <div key={p.key} className="param-field wide">
             <SwitchField
               label={labelKey}
               attention={p.key === 'advanced'}

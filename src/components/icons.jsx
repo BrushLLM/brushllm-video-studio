@@ -18,6 +18,10 @@ export const Icons = {
   queue: (s) => wrap(<><path d="M4 6h16M4 12h16M4 18h10" /></>, s),
   settings: (s) => wrap(<><circle cx="12" cy="12" r="3" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" /></>, s),
   external: (s) => wrap(<><path d="M14 4h6v6m0-6-9 9M10 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4" /></>, s),
+  sidebarClose: (s) => wrap(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m6-11-3 3 3 3" /></>, s),
+  sidebarOpen: (s) => wrap(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m4-11 3 3-3 3" /></>, s),
+  chevronLeft: (s) => wrap(<path d="m14 6-6 6 6 6" />, s),
+  chevronRight: (s) => wrap(<path d="m10 6 6 6-6 6" />, s),
 
   convert: (s) => wrap(<><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" /></>, s),
   compress: (s) => wrap(<><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M12 8v8M8.8 12.8L12 16l3.2-3.2" /></>, s),

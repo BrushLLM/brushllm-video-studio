@@ -1,5 +1,9 @@
 export default {
   'nav.workspace': "ワークスペースのナビゲーション",
+  'nav.collapse': "サイドバーを折りたたむ",
+  'nav.expand': "サイドバーを展開",
+  'common.back': "戻る",
+  'common.forward': "進む",
   'workspace.preview': "素材とプレビュー",
   'workspace.previewFrame': "元のフレームを表示",
   'workspace.previewFailed': "元のフレームを表示できません。ファイルを再生できるか確認してください。",

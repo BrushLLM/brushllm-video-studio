@@ -1,5 +1,9 @@
 export default {
   'nav.workspace': "Navigation de l’espace de travail",
+  'nav.collapse': "Réduire la barre latérale",
+  'nav.expand': "Développer la barre latérale",
+  'common.back': "Précédent",
+  'common.forward': "Suivant",
   'workspace.preview': "Médias et aperçu",
   'workspace.previewFrame': "Afficher une image source",
   'workspace.previewFailed': "Impossible d’afficher l’image source. Vérifiez que le fichier peut être lu.",

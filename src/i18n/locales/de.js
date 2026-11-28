@@ -1,5 +1,9 @@
 export default {
   'nav.workspace': "Arbeitsbereichsnavigation",
+  'nav.collapse': "Seitenleiste einklappen",
+  'nav.expand': "Seitenleiste ausklappen",
+  'common.back': "Zurück",
+  'common.forward': "Vorwärts",
   'workspace.preview': "Medien und Vorschau",
   'workspace.previewFrame': "Quellbild anzeigen",
   'workspace.previewFailed': "Das Quellbild konnte nicht angezeigt werden. Prüfen Sie, ob sich die Datei abspielen lässt.",

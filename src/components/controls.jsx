@@ -174,9 +174,11 @@ export function PresetCards({ value, onChange }) {
           className={`preset-card${value === p ? ' selected' : ''}`}
         >
           <input type="radio" className="preset-input" name={groupName} value={p} checked={value === p} onChange={() => onChange(p)} />
-          <span className="preset-name">{t(`preset.${p}`)}</span>
+          <span className="preset-heading">
+            <span className="preset-name">{t(`preset.${p}`)}</span>
+            <span className="preset-check" aria-hidden="true"><Icon name="check" size={13} /></span>
+          </span>
           <span className="preset-desc">{t(`preset.${p}.desc`)}</span>
-          <span className="preset-check" aria-hidden="true"><Icon name="check" size={13} /></span>
         </label>
       ))}
     </div>
